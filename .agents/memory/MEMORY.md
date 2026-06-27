@@ -1,0 +1,1 @@
+- [HANDOFF.md convention](handoff-convention.md) — mandatory: read at session start, append entry before finishing, every session.
