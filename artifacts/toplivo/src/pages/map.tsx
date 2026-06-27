@@ -13,8 +13,8 @@ import {
 import MarkerClusterGroup from "react-leaflet-cluster";
 import type { LatLngBounds } from "leaflet";
 import "leaflet/dist/leaflet.css";
-import "react-leaflet-cluster/lib/assets/MarkerCluster.css";
-import "react-leaflet-cluster/lib/assets/MarkerCluster.Default.css";
+import "react-leaflet-cluster/dist/assets/MarkerCluster.css";
+import "react-leaflet-cluster/dist/assets/MarkerCluster.Default.css";
 
 const BASE_URL = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
 

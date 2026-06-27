@@ -80,10 +80,21 @@ DB push command: `pnpm --filter @workspace/db run push`
 - Requires `openpyxl` and `psycopg2` Python packages (`pip install openpyxl psycopg2`).
 - Requires `DATABASE_URL` env var.
 
+**Workflows running (set up 2026-06-27)**:
+- `API Server` — `cd /home/runner/workspace && PORT=8080 node --enable-source-maps artifacts/api-server/dist/index.mjs` (console, port 8080)
+  - **IMPORTANT**: Must use this direct node command, NOT `pnpm run dev`. The pnpm dev script causes EADDRINUSE race on port 8080.
+  - Pre-built binary at `artifacts/api-server/dist/index.mjs`. Rebuild with `pnpm --filter @workspace/api-server run build` if code changes.
+- `artifacts/toplivo: web` — auto-managed by platform (Vite dev server, port 21641)
+- `artifacts/mockup-sandbox: Component Preview Server` — auto-managed by platform
+
+**Bug fixed 2026-06-27**:
+- `artifacts/toplivo/src/pages/map.tsx` had wrong import path for MarkerCluster CSS.
+  - Was: `react-leaflet-cluster/lib/assets/MarkerCluster.css`
+  - Fixed to: `react-leaflet-cluster/dist/assets/MarkerCluster.css` (same for Default.css)
+
 **Pending / Next steps**:
-- Set up Replit workflows for `api-server` and `toplivo` frontend so the app runs in preview.
-- All secrets already set: `DATABASE_URL`, `SESSION_SECRET`, `TELEGRAM_BOT_TOKEN`, `INTERNAL_API_SECRET`, `CRYPTO_BOT_TOKEN`, `ADMIN_TELEGRAM_ID`.
-- DB schema already pushed + seeded — do NOT re-run seed script without intent, it clears all vouchers.
+- All secrets set: `DATABASE_URL`, `SESSION_SECRET`, `TELEGRAM_BOT_TOKEN`, `INTERNAL_API_SECRET`, `CRYPTO_BOT_TOKEN`, `ADMIN_TELEGRAM_ID`.
+- DB schema pushed + seeded — do NOT re-run seed script casually, it clears all vouchers.
 - Address known issues listed above (auth, broadcast, real market prices).
 
 ---
