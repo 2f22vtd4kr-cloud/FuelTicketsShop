@@ -1,247 +1,351 @@
-import React from "react";
+import React, { useState } from 'react';
+import { Map, Grid, BarChart3, Lock, X } from 'lucide-react';
+
+const QRCodeSVG = () => {
+  // Generate a deterministic 21x21 QR code pattern
+  const size = 21;
+  const grid = Array(size).fill(0).map(() => Array(size).fill(0));
+
+  // Helper to draw a finder pattern
+  const drawFinder = (startX: number, startY: number) => {
+    for (let y = 0; y < 7; y++) {
+      for (let x = 0; x < 7; x++) {
+        const isOuter = y === 0 || y === 6 || x === 0 || x === 6;
+        const isInner = (y >= 2 && y <= 4) && (x >= 2 && x <= 4);
+        if (isOuter || isInner) {
+          grid[startY + y][startX + x] = 1;
+        }
+      }
+    }
+  };
+
+  // Draw 3 finder patterns
+  drawFinder(0, 0); // Top-left
+  drawFinder(14, 0); // Top-right
+  drawFinder(0, 14); // Bottom-left
+
+  // Fill remaining cells with pseudo-random data (deterministic)
+  let seed = 12345;
+  const random = () => {
+    seed = (seed * 9301 + 49297) % 233280;
+    return seed / 233280;
+  };
+
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      // Skip finder areas
+      if ((x < 8 && y < 8) || (x > 13 && y < 8) || (x < 8 && y > 13)) {
+        continue;
+      }
+      // 60% fill probability for data cells
+      if (random() < 0.6) {
+        grid[y][x] = 1;
+      }
+    }
+  }
+
+  const rects = [];
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      if (grid[y][x]) {
+        rects.push(<rect key={`${x}-${y}`} x={x} y={y} width="1" height="1" fill="#000000" />);
+      }
+    }
+  }
+
+  return (
+    <svg viewBox="0 0 21 21" className="w-full h-full" shapeRendering="crispEdges">
+      <rect width="21" height="21" fill="#FFFFFF" />
+      {rects}
+    </svg>
+  );
+};
 
 export function VaultScreen() {
+  const [activeTab, setActiveTab] = useState('active');
+  const [sheetOpen, setSheetOpen] = useState(true);
+
   return (
-    <div
-      className="relative overflow-hidden font-sans"
+    <div 
+      className="relative w-full max-w-[390px] h-[844px] overflow-hidden mx-auto font-sans"
       style={{
-        width: "390px",
-        height: "844px",
-        backgroundColor: "#0A0A0A",
-        color: "#ffffff",
-        fontFamily: "'Inter', sans-serif",
+        backgroundColor: '#0A0A0F',
+        color: 'white',
       }}
     >
-      {/* Top Header */}
-      <div className="px-6 pt-14 pb-4 flex justify-between items-end">
-        <h1 className="text-3xl font-bold tracking-tight">СЕЙФ</h1>
-        <span className="text-sm font-medium text-white/50 mb-1">
-          3 активных
-        </span>
-      </div>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        .vault-container * {
+          font-family: 'Inter', sans-serif;
+        }
+      `}</style>
 
-      {/* Tabs */}
-      <div className="px-6 flex gap-3 mb-6 overflow-x-auto no-scrollbar">
-        <div className="relative px-4 py-2 rounded-full bg-white/5 border border-white/10 text-sm font-medium text-white flex items-center gap-1.5 whitespace-nowrap">
-          Активные
-          <span className="w-1.5 h-1.5 rounded-full bg-[#3B82F6] shadow-[0_0_8px_rgba(59,130,246,0.8)]"></span>
-          <div className="absolute -bottom-[1px] left-1/2 -translate-x-1/2 w-1/2 h-[2px] bg-[#3B82F6] shadow-[0_0_12px_rgba(59,130,246,1)] blur-[1px]"></div>
-        </div>
-        <div className="px-4 py-2 rounded-full bg-transparent text-sm font-medium text-white/40 whitespace-nowrap">
-          Использованные
-        </div>
-        <div className="px-4 py-2 rounded-full bg-transparent text-sm font-medium text-white/40 whitespace-nowrap">
-          Истёкшие
-        </div>
-      </div>
-
-      {/* Vouchers List */}
-      <div className="px-6 flex flex-col gap-4">
-        {/* Lukoil Card */}
-        <div className="relative rounded-[20px] p-5 flex flex-col gap-3 overflow-hidden"
-          style={{
-            background: "rgba(255,255,255,0.03)",
-            backdropFilter: "blur(20px)",
-            border: "1px solid rgba(255,255,255,0.05)",
-            borderLeft: "1px solid rgba(236,72,153,0.3)",
-            boxShadow: "-10px 0 30px -15px rgba(236,72,153,0.2)",
-          }}
-        >
-          <div className="absolute left-0 top-0 bottom-0 w-1 bg-pink-500 rounded-r-md"></div>
-          
-          <div className="flex justify-between items-start">
-            <div className="px-2.5 py-1 rounded-full bg-white/5 border border-white/5 text-[10px] font-semibold text-pink-500 uppercase tracking-wider">
-              Лукойл
-            </div>
-            <div className="text-xs text-white/40 font-medium">Истекает через 67 дней</div>
-          </div>
-          
-          <div>
-            <div className="text-xl font-bold tracking-tight mb-1">АИ-95 · 40 л</div>
-            <div className="text-sm text-white/60">58.90 ₽/л зафиксировано</div>
-          </div>
-        </div>
-
-        {/* Gazpromneft Card */}
-        <div className="relative rounded-[20px] p-5 flex flex-col gap-3 overflow-hidden"
-          style={{
-            background: "rgba(255,255,255,0.03)",
-            backdropFilter: "blur(20px)",
-            border: "1px solid rgba(255,255,255,0.05)",
-            borderLeft: "1px solid rgba(245,158,11,0.3)",
-            boxShadow: "-10px 0 30px -15px rgba(245,158,11,0.2)",
-          }}
-        >
-          <div className="absolute left-0 top-0 bottom-0 w-1 bg-amber-500 rounded-r-md"></div>
-          
-          <div className="flex justify-between items-start">
-            <div className="px-2.5 py-1 rounded-full bg-white/5 border border-white/5 text-[10px] font-semibold text-amber-500 uppercase tracking-wider">
-              Газпромнефть
-            </div>
-            <div className="text-xs text-white/40 font-medium">Истекает через 12 дней</div>
-          </div>
-          
-          <div>
-            <div className="text-xl font-bold tracking-tight mb-1">АИ-92 · 60 л</div>
-            <div className="text-sm text-white/60">54.20 ₽/л зафиксировано</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Expanded Voucher Bottom Sheet Overlay */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-10" />
-
-      {/* Bottom Sheet */}
-      <div className="absolute bottom-0 left-0 right-0 h-[65%] z-20 flex flex-col items-center px-6 pt-3 pb-8"
-        style={{
-          background: "rgba(15,15,20,0.96)",
-          backdropFilter: "blur(40px)",
-          borderTopLeftRadius: "28px",
-          borderTopRightRadius: "28px",
-          borderTop: "1px solid rgba(59,130,246,0.4)",
-          boxShadow: "0 -10px 40px -10px rgba(59,130,246,0.15)",
-        }}
-      >
-        {/* Drag handle */}
-        <div className="w-12 h-1.5 rounded-full bg-white/20 mb-6" />
-
-        {/* Sheet Header */}
-        <div className="flex items-center gap-3 w-full mb-8">
-          <div className="px-3 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-xs font-semibold text-blue-500 uppercase tracking-wider">
-            Роснефть
-          </div>
-          <div className="text-xl font-bold">АИ-98 · 30 л</div>
-        </div>
-
-        {/* QR Code Container */}
-        <div className="relative p-6 rounded-[24px] mb-4 flex items-center justify-center bg-white/5"
-          style={{
-            border: "1px solid rgba(255,255,255,0.1)",
-            boxShadow: "inset 0 0 20px rgba(59,130,246,0.1), 0 0 30px rgba(59,130,246,0.2)",
-          }}
-        >
-          <div className="absolute inset-0 rounded-[24px] border border-[#3B82F6] opacity-30 blur-[2px]"></div>
-          
-          {/* Simulated QR Code via SVG */}
-          <svg width="180" height="180" viewBox="0 0 100 100" fill="white" className="opacity-90">
-            <rect x="10" y="10" width="20" height="20" />
-            <rect x="15" y="15" width="10" height="10" fill="black" />
-            <rect x="17.5" y="17.5" width="5" height="5" />
-
-            <rect x="70" y="10" width="20" height="20" />
-            <rect x="75" y="15" width="10" height="10" fill="black" />
-            <rect x="77.5" y="17.5" width="5" height="5" />
-
-            <rect x="10" y="70" width="20" height="20" />
-            <rect x="15" y="75" width="10" height="10" fill="black" />
-            <rect x="17.5" y="77.5" width="5" height="5" />
-
-            <rect x="40" y="10" width="5" height="5" />
-            <rect x="50" y="10" width="10" height="5" />
-            <rect x="40" y="20" width="10" height="5" />
-            <rect x="55" y="20" width="5" height="5" />
-            
-            <rect x="35" y="35" width="5" height="5" />
-            <rect x="45" y="35" width="20" height="5" />
-            <rect x="70" y="35" width="10" height="5" />
-            
-            <rect x="10" y="45" width="5" height="5" />
-            <rect x="20" y="45" width="15" height="5" />
-            <rect x="40" y="45" width="5" height="15" />
-            <rect x="50" y="45" width="20" height="5" />
-            
-            <rect x="10" y="55" width="10" height="5" />
-            <rect x="25" y="55" width="5" height="10" />
-            
-            <rect x="40" y="70" width="15" height="5" />
-            <rect x="60" y="70" width="5" height="15" />
-            <rect x="70" y="70" width="10" height="5" />
-            
-            <rect x="40" y="80" width="5" height="10" />
-            <rect x="50" y="80" width="5" height="5" />
-            <rect x="70" y="80" width="5" height="10" />
-            <rect x="80" y="80" width="10" height="5" />
-            
-            <rect x="35" y="90" width="20" height="5" />
-            <rect x="65" y="90" width="25" height="5" />
-            
-            <rect x="80" y="50" width="10" height="10" />
-            <rect x="82.5" y="52.5" width="5" height="5" fill="black" />
-          </svg>
-        </div>
-
-        {/* Voucher Code */}
-        <div className="font-mono text-lg tracking-[0.2em] text-white/60 mb-6 font-semibold">
-          TOPLIVO-A7B3C9
-        </div>
-
-        {/* Info Row */}
-        <div className="w-full flex justify-between items-center mb-5 text-sm">
-          <div className="text-white/80 font-medium">65.10 ₽/л</div>
-          <div className="text-white/40">Куплено 15.06.2026</div>
-        </div>
-
-        {/* Progress Bar */}
-        <div className="w-full mb-auto">
-          <div className="flex justify-between items-end mb-2">
-            <span className="text-xs text-white/50">Истекает через 45 дней</span>
-          </div>
-          <div className="h-1.5 w-full rounded-full bg-white/10 overflow-hidden">
-            <div className="h-full bg-blue-500 rounded-full w-1/2 shadow-[0_0_10px_rgba(59,130,246,0.8)]"></div>
-          </div>
-        </div>
-
-        {/* CTA Button */}
-        <button className="w-full py-4 mt-6 rounded-[20px] font-semibold text-lg relative overflow-hidden group"
-          style={{
-            background: "linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)",
-            boxShadow: "0 10px 25px -5px rgba(37,99,235,0.4), inset 0 1px 0 rgba(255,255,255,0.2)",
-          }}
-        >
-          <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-          Показать кассиру
-        </button>
-      </div>
-
-      {/* Bottom Navigation */}
-      <div className="absolute bottom-0 left-0 right-0 h-[88px] bg-[#0A0A0A]/90 backdrop-blur-xl border-t border-white/5 flex justify-around items-center px-2 pb-6 z-30">
-        {/* Map Tab */}
-        <div className="flex flex-col items-center gap-1.5 opacity-40">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"></polygon>
-            <line x1="9" y1="3" x2="9" y2="18"></line>
-            <line x1="15" y1="6" x2="15" y2="21"></line>
-          </svg>
-          <span className="text-[10px] font-medium">Карта</span>
-        </div>
+      <div className="vault-container relative w-full h-full flex flex-col">
         
-        {/* Catalog Tab */}
-        <div className="flex flex-col items-center gap-1.5 opacity-40">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6Z" />
-            <path d="M4 10h16" />
-            <path d="M10 4v16" />
-          </svg>
-          <span className="text-[10px] font-medium">Каталог</span>
+        {/* Header */}
+        <div className="px-6 pt-14 pb-4 flex items-center justify-between z-10">
+          <h1 className="text-[18px] font-bold tracking-[2px]">СЕЙФ</h1>
+          <span className="text-[12px]" style={{ color: 'rgba(255,255,255,0.35)' }}>3 активных</span>
         </div>
 
-        {/* Vault Tab (Active) */}
-        <div className="flex flex-col items-center gap-1.5 text-[#3B82F6] relative">
-          <div className="absolute -top-3 w-1 h-1 rounded-full bg-[#3B82F6] shadow-[0_0_8px_rgba(59,130,246,1)]"></div>
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-          </svg>
-          <span className="text-[10px] font-medium text-white shadow-[#3B82F6]">Сейф</span>
+        {/* Filters */}
+        <div className="px-6 pb-6 flex gap-3 overflow-x-auto no-scrollbar z-10" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+          <button 
+            onClick={() => setActiveTab('active')}
+            className="whitespace-nowrap rounded-full transition-all duration-300"
+            style={{
+              padding: '8px 18px',
+              fontSize: '13px',
+              fontWeight: 500,
+              backgroundColor: activeTab === 'active' ? 'rgba(59,130,246,0.12)' : 'rgba(255,255,255,0.04)',
+              border: `1px solid ${activeTab === 'active' ? 'rgba(59,130,246,0.35)' : 'rgba(255,255,255,0.08)'}`,
+              color: activeTab === 'active' ? '#60A5FA' : 'rgba(255,255,255,0.35)',
+              boxShadow: activeTab === 'active' ? '0 0 16px rgba(59,130,246,0.15)' : 'none'
+            }}
+          >
+            Активные
+          </button>
+          <button 
+            onClick={() => setActiveTab('used')}
+            className="whitespace-nowrap rounded-full transition-all duration-300"
+            style={{
+              padding: '8px 18px',
+              fontSize: '13px',
+              fontWeight: 500,
+              backgroundColor: activeTab === 'used' ? 'rgba(59,130,246,0.12)' : 'rgba(255,255,255,0.04)',
+              border: `1px solid ${activeTab === 'used' ? 'rgba(59,130,246,0.35)' : 'rgba(255,255,255,0.08)'}`,
+              color: activeTab === 'used' ? '#60A5FA' : 'rgba(255,255,255,0.35)',
+            }}
+          >
+            Использованные
+          </button>
+          <button 
+            onClick={() => setActiveTab('expired')}
+            className="whitespace-nowrap rounded-full transition-all duration-300"
+            style={{
+              padding: '8px 18px',
+              fontSize: '13px',
+              fontWeight: 500,
+              backgroundColor: activeTab === 'expired' ? 'rgba(59,130,246,0.12)' : 'rgba(255,255,255,0.04)',
+              border: `1px solid ${activeTab === 'expired' ? 'rgba(59,130,246,0.35)' : 'rgba(255,255,255,0.08)'}`,
+              color: activeTab === 'expired' ? '#60A5FA' : 'rgba(255,255,255,0.35)',
+            }}
+          >
+            Истёкшие
+          </button>
         </div>
 
-        {/* Profile Tab */}
-        <div className="flex flex-col items-center gap-1.5 opacity-40">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
-            <circle cx="12" cy="7" r="4"></circle>
-          </svg>
-          <span className="text-[10px] font-medium">Профиль</span>
+        {/* Voucher List */}
+        <div 
+          className="flex-1 px-6 flex flex-col gap-4 overflow-y-auto transition-all duration-500"
+          style={{
+            filter: sheetOpen ? 'blur(6px) brightness(0.5)' : 'none',
+            transform: sheetOpen ? 'scale(0.96) translateY(-10px)' : 'none',
+            paddingBottom: '100px' // Space for bottom nav
+          }}
+        >
+          {/* Card 1 */}
+          <div 
+            className="relative overflow-hidden cursor-pointer"
+            onClick={() => setSheetOpen(true)}
+            style={{
+              backgroundColor: 'rgba(255,255,255,0.04)',
+              borderRadius: '20px',
+              border: '1px solid rgba(255,255,255,0.07)',
+              padding: '16px 18px',
+              borderColor: 'rgba(220,38,38,0.15)',
+              boxShadow: 'inset 0 0 20px rgba(220,38,38,0.06)'
+            }}
+          >
+            <div 
+              className="absolute left-0 top-0 bottom-0 w-[3px]"
+              style={{ backgroundColor: '#DC2626', borderRadius: '2px' }}
+            />
+            <div className="flex justify-between items-center mb-3">
+              <span 
+                className="px-2 py-0.5 rounded-full text-[10px] uppercase font-bold tracking-[1.2px]"
+                style={{ backgroundColor: 'rgba(220,38,38,0.15)', color: '#FCA5A5' }}
+              >
+                ЛУКОЙЛ
+              </span>
+              <span className="text-[12px]" style={{ color: 'rgba(255,255,255,0.3)' }}>67 дн.</span>
+            </div>
+            <div className="text-[16px] font-semibold mb-1">АИ-95 · 40 л</div>
+            <div className="text-[13px]" style={{ color: 'rgba(255,255,255,0.4)' }}>58.90 ₽/л зафиксировано</div>
+          </div>
+
+          {/* Card 2 */}
+          <div 
+            className="relative overflow-hidden cursor-pointer"
+            onClick={() => setSheetOpen(true)}
+            style={{
+              backgroundColor: 'rgba(255,255,255,0.04)',
+              borderRadius: '20px',
+              border: '1px solid rgba(255,255,255,0.07)',
+              padding: '16px 18px',
+              borderColor: 'rgba(245,158,11,0.15)',
+              boxShadow: 'inset 0 0 20px rgba(245,158,11,0.06)'
+            }}
+          >
+            <div 
+              className="absolute left-0 top-0 bottom-0 w-[3px]"
+              style={{ backgroundColor: '#F59E0B', borderRadius: '2px' }}
+            />
+            <div className="flex justify-between items-center mb-3">
+              <span 
+                className="px-2 py-0.5 rounded-full text-[10px] uppercase font-bold tracking-[1.2px]"
+                style={{ backgroundColor: 'rgba(245,158,11,0.15)', color: '#FCD34D' }}
+              >
+                ГАЗПРОМНЕФТЬ
+              </span>
+              <span className="text-[12px]" style={{ color: 'rgba(255,255,255,0.3)' }}>31 дн.</span>
+            </div>
+            <div className="text-[16px] font-semibold mb-1">АИ-92 · 60 л</div>
+            <div className="text-[13px]" style={{ color: 'rgba(255,255,255,0.4)' }}>51.20 ₽/л зафиксировано</div>
+          </div>
+        </div>
+
+        {/* Bottom Nav */}
+        <div 
+          className="absolute bottom-0 w-full flex items-center justify-around z-10"
+          style={{
+            height: '72px',
+            backgroundColor: 'rgba(10,10,15,0.9)',
+            backdropFilter: 'blur(24px)',
+            borderTop: '1px solid rgba(255,255,255,0.06)'
+          }}
+        >
+          <div className="flex flex-col items-center gap-1 opacity-40">
+            <Map size={20} />
+            <span className="text-[10px]">Карта</span>
+          </div>
+          <div className="flex flex-col items-center gap-1 opacity-40">
+            <Grid size={20} />
+            <span className="text-[10px]">Каталог</span>
+          </div>
+          <div className="flex flex-col items-center gap-1 opacity-40">
+            <BarChart3 size={20} />
+            <span className="text-[10px]">Аналитика</span>
+          </div>
+          <div className="flex flex-col items-center gap-1 relative" style={{ color: '#60A5FA' }}>
+            <div className="absolute -top-3 w-1 h-1 rounded-full" style={{ backgroundColor: '#60A5FA' }} />
+            <Lock size={20} />
+            <span className="text-[10px]">Сейф</span>
+          </div>
+        </div>
+
+        {/* Overlay for Bottom Sheet */}
+        <div 
+          className="absolute inset-0 z-20 pointer-events-none transition-opacity duration-500"
+          style={{
+            backgroundColor: 'rgba(0,0,0,0.4)',
+            opacity: sheetOpen ? 1 : 0
+          }}
+        />
+
+        {/* Expanded Voucher Bottom Sheet */}
+        <div 
+          className="absolute bottom-0 w-full z-30 transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]"
+          style={{
+            height: '62%',
+            backgroundColor: 'rgba(10,10,15,0.95)',
+            backdropFilter: 'blur(48px)',
+            borderTopLeftRadius: '28px',
+            borderTopRightRadius: '28px',
+            borderTop: '1px solid rgba(59,130,246,0.2)',
+            transform: sheetOpen ? 'translateY(0)' : 'translateY(100%)',
+            boxShadow: '0 -20px 60px rgba(0,0,0,0.5)'
+          }}
+        >
+          <div className="flex flex-col items-center h-full px-6 py-4">
+            {/* Drag Handle & Close */}
+            <div className="w-full flex justify-center relative mb-6">
+              <div 
+                className="w-[40px] h-[4px] rounded-full cursor-pointer"
+                style={{ backgroundColor: 'rgba(255,255,255,0.12)' }}
+                onClick={() => setSheetOpen(false)}
+              />
+              <button 
+                className="absolute right-0 top-1/2 -translate-y-1/2 p-2 opacity-50 hover:opacity-100"
+                onClick={() => setSheetOpen(false)}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Header Row */}
+            <div className="w-full flex justify-between items-center mb-8">
+              <span 
+                className="px-2 py-0.5 rounded-full text-[10px] uppercase font-bold tracking-[1.2px]"
+                style={{ backgroundColor: 'rgba(59,130,246,0.15)', color: '#60A5FA' }}
+              >
+                РОСНЕФТЬ
+              </span>
+              <span className="text-[16px] font-semibold text-white">АИ-98 · 30 л</span>
+            </div>
+
+            {/* QR Code Centrepiece */}
+            <div 
+              className="relative rounded-[20px] p-[16px] mb-6 flex items-center justify-center"
+              style={{
+                width: '180px',
+                height: '180px',
+                backgroundColor: 'rgba(255,255,255,0.96)',
+                boxShadow: '0 0 0 1px rgba(59,130,246,0.3), 0 0 40px rgba(59,130,246,0.2), 0 20px 60px rgba(0,0,0,0.5)'
+              }}
+            >
+              <QRCodeSVG />
+            </div>
+
+            {/* Voucher Code */}
+            <div 
+              className="mb-8 text-center text-[12px] tracking-[3px]"
+              style={{
+                fontFamily: '"Courier New", Courier, monospace',
+                color: 'rgba(255,255,255,0.3)'
+              }}
+            >
+              TOPLIVO · A7B3C9
+            </div>
+
+            {/* Info Strip */}
+            <div className="w-full flex justify-between items-center mb-6">
+              <span className="text-[14px] font-semibold" style={{ color: '#60A5FA' }}>65.10 ₽/л</span>
+              <span className="text-[13px]" style={{ color: 'rgba(255,255,255,0.35)' }}>15.06.2026</span>
+            </div>
+
+            {/* Expiry Bar */}
+            <div className="w-full mb-8">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-[12px]" style={{ color: 'rgba(255,255,255,0.4)' }}>Истекает через 45 дней</span>
+                <span className="text-[12px]" style={{ color: '#60A5FA' }}>50%</span>
+              </div>
+              <div 
+                className="w-full h-[4px] rounded-full relative overflow-hidden"
+                style={{ backgroundColor: 'rgba(255,255,255,0.08)' }}
+              >
+                <div 
+                  className="absolute left-0 top-0 bottom-0 w-[50%] rounded-full"
+                  style={{
+                    background: 'linear-gradient(90deg, #3B82F6, #60A5FA)',
+                    boxShadow: '0 0 8px rgba(59,130,246,0.5)'
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* CTA */}
+            <button 
+              className="w-full h-[56px] rounded-[18px] text-white font-semibold text-[16px] transition-transform active:scale-95 mt-auto"
+              style={{
+                background: 'linear-gradient(135deg, #3B82F6, #2563EB)',
+                boxShadow: '0 12px 40px rgba(59,130,246,0.4), 0 0 0 1px rgba(59,130,246,0.2)'
+              }}
+            >
+              Показать кассиру
+            </button>
+
+          </div>
         </div>
       </div>
     </div>
