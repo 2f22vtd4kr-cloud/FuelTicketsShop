@@ -69,8 +69,8 @@ function ViewportLoader({
       });
       try {
         const res = await fetch(`${BASE_URL}/api/stations?${params}`);
-        const data: StationMarker[] = await res.json();
-        onStationsLoaded(data);
+        const data = await res.json();
+        onStationsLoaded(Array.isArray(data) ? data : []);
       } catch (e) {
         console.error("Failed to load stations", e);
       }

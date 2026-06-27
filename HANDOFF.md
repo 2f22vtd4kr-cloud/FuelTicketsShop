@@ -249,4 +249,33 @@ DB push command: `pnpm --filter @workspace/db run push`
 
 ---
 
+### Session 5 — 2026-06-27 (Replit Migration)
+
+**Status at start**: Fresh Replit environment — no workflows, no DB schema, no secrets.
+
+**What was done**:
+- Installed all pnpm workspace packages (`pnpm install`).
+- Pushed DB schema to fresh Replit PostgreSQL (`pnpm --filter @workspace/db run push`).
+- Ran station seed script (`scripts/seed_stations.py`) → 10,234 stations + 37,075 price rows.
+- Installed Python deps for seed: `openpyxl`, `psycopg2-binary` via `python3 -m pip install`.
+- Set `PORT=8080` env var (shared).
+- Configured `API Server` workflow: `pnpm install && pnpm --filter @workspace/api-server run build && PORT=8080 node --enable-source-maps artifacts/api-server/dist/index.mjs` (console, port 8080).
+- Configured `Start application` workflow: `pnpm install && BASE_PATH=/ PORT=5000 pnpm --filter @workspace/toplivo run dev` (webview, port 5000).
+- User provided secrets: `TELEGRAM_BOT_TOKEN`, `CRYPTO_BOT_TOKEN`, `ADMIN_TELEGRAM_ID`, `INTERNAL_API_SECRET`.
+- Fixed defensive guard in `artifacts/toplivo/src/pages/map.tsx` line ~73: `onStationsLoaded(Array.isArray(data) ? data : [])` to handle API error objects gracefully.
+
+**Verification**:
+- API Server: running on port 8080, Telegram webhook registered at startup. ✅
+- Frontend: Vite dev server on port 5000, map loads with 329 clustered stations (Moscow view). ✅
+- No browser console errors. ✅
+
+**Pending / Next steps**:
+- Re-register Telegram webhook on production deploy (`BOT_WEBHOOK_URL` env var).
+- Push notifications when voucher < 7 days from expiry.
+- Voucher redemption endpoint (QR scan → mark used).
+- Real market prices (replace `Math.random()` stubs).
+- Admin broadcast actually sends messages.
+
+---
+
 _Next session: append a new `### Session N — YYYY-MM-DD` block above this line._
