@@ -54,19 +54,37 @@ DB push command: `pnpm --filter @workspace/db run push`
 
 ---
 
-### Session 1 — 2025-06-27
+### Session 1 — 2026-06-27
 
 **Status at start**: Fresh repo import. No workflows configured, no artifacts registered in Replit. Codebase fully written and functional in code.
 
-**What was done this session**:
+**What was done**:
 - Explored the full project structure and documented the architecture above.
 - Created this HANDOFF.md file to ensure continuity across sessions.
 - User confirmed this file is **mandatory** and must be updated every session.
+- Artifacts were auto-registered by Replit: `toplivo` (web, `/`), `api-server` (api, `/api`), `mockup-sandbox` (design, `/__mockup`).
+
+**Station seeding — key findings**:
+- User provided new Kardeks xlsx: `attached_assets/Spisok_AZS_Kardeks_1782580569294.xlsx` (13,892 rows, dated 11.06.2026).
+- **The new file is content-identical to the old one** (`Spisok_AZS_Kardeks_1782577646945.xlsx`) — same 11,318 fuel rows, same brands, same structure.
+- Crimea entries in the xlsx are car washes/services (no Бензин/ДТ) → **0 fuel stations** from file.
+- Crimea, ДНР, ЛНР, Херсонская, Запорожская stations come entirely from `EXTRA_STATIONS` in `scripts/seed_stations.py` (47 hardcoded entries).
+- Updated seed script to point to new file path.
+- **Seed script has NOT been run yet** — `DATABASE_URL` must be set first. Run: `python3 scripts/seed_stations.py`
+
+**Seed script details** (`scripts/seed_stations.py`):
+- Source file: `attached_assets/Spisok_AZS_Kardeks_1782580569294.xlsx`
+- Skips first 4 rows (headers). Filters rows where col[8] or col[9] == `+` (Бензин/ДТ).
+- Maps city/region names to lat/lng via `CITY_COORDS` / `REGION_COORDS` dicts + random jitter.
+- Clears all existing stations/prices/vouchers before inserting.
+- Requires `openpyxl` and `psycopg2` Python packages (`pip install openpyxl psycopg2`).
+- Requires `DATABASE_URL` env var.
 
 **Pending / Next steps**:
+- Set `DATABASE_URL` in Replit Secrets if not already set.
+- Run `pip install openpyxl psycopg2 && python3 scripts/seed_stations.py` to seed the database.
 - Set up Replit workflows for `api-server` and `toplivo` frontend so the app runs in preview.
-- Register artifacts in `artifact.toml` so they appear in the preview dropdown.
-- Verify `DATABASE_URL` and other secrets are set.
+- Verify `INTERNAL_API_SECRET` env var is set for admin routes.
 - Address known issues listed above (auth, broadcast, real market prices).
 
 ---

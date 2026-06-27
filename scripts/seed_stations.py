@@ -555,7 +555,7 @@ def get_coords(city, region):
 # ---------------------------------------------------------------------------
 print("Loading xlsx…")
 wb = openpyxl.load_workbook(
-    "/home/runner/workspace/attached_assets/Spisok_AZS_Kardeks_1782577646945.xlsx"
+    "/home/runner/workspace/attached_assets/Spisok_AZS_Kardeks_1782580569294.xlsx"
 )
 ws = wb.active
 rows = list(ws.iter_rows(values_only=True))[4:]  # skip header rows
