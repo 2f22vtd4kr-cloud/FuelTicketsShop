@@ -160,6 +160,34 @@ export interface BroadcastResult {
   failed: number;
 }
 
+export interface CreateOrderInput {
+  stationId: number;
+  fuelType: string;
+  liters: number;
+  /** stars | crypto */
+  paymentMethod: string;
+}
+
+export interface PaymentOrder {
+  orderId: number;
+  /** stars | crypto */
+  method: string;
+  invoiceUrl: string;
+  /** @nullable */
+  webInvoiceUrl?: string | null;
+  totalRub: number;
+  /** @nullable */
+  starsAmount?: number | null;
+}
+
+export interface PaymentOrderStatus {
+  orderId: number;
+  /** pending | paid | failed */
+  status: string;
+  /** @nullable */
+  voucherId?: number | null;
+}
+
 export type ListStationsParams = {
 network?: string;
 fuelType?: string;

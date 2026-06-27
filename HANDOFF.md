@@ -132,4 +132,58 @@ DB push command: `pnpm --filter @workspace/db run push`
 
 ---
 
+### Session 3 — 2026-06-27
+
+**Status at start**: Auth fully secure. No real payments — `POST /vouchers` created vouchers immediately without any payment gate.
+
+**What was done — Payment Integration**:
+
+**Backend:**
+- Added `payment_orders` table (`lib/db/src/schema/payment_orders.ts`) — tracks pending payments before voucher creation. Fields: userId, stationId, fuelType, liters, pricePerLiter, totalAmountRub, paymentMethod, status (pending/paid/failed), externalInvoiceId, voucherId, createdAt, paidAt.
+- Created `artifacts/api-server/src/lib/cryptobot.ts` — CryptoBot API client. `createCryptoBotInvoice` creates fiat-RUB invoices paid in TON/USDT. `verifyCryptoBotWebhook` verifies HMAC-SHA256 webhook signatures.
+- Created `artifacts/api-server/src/lib/telegram-bot.ts` — Telegram Bot API client. `createStarsInvoiceLink` creates Stars (`XTR`) invoice links. `answerPreCheckoutQuery` responds to Stars pre-checkout. Conversion: 1 Star = 2 RUB (`rubToStars`).
+- Created `artifacts/api-server/src/routes/payments.ts` — 4 endpoints:
+  - `POST /payments/create-order` (auth required): validates order, inserts pending `payment_order`, calls CryptoBot or Stars API, returns `{ orderId, invoiceUrl, method, totalRub, starsAmount? }`.
+  - `GET /payments/order/:id` (auth required): poll order status, returns `{ orderId, status, voucherId }`.
+  - `POST /payments/cryptobot-webhook` (no auth, signature verified): marks order paid, calls `createVoucherFromOrder`.
+  - `POST /payments/telegram-webhook` (no auth): handles `pre_checkout_query` (answer within 10s) + `successful_payment`, marks order paid, calls `createVoucherFromOrder`.
+- `createVoucherFromOrder` is the single function that creates the actual voucher + QR code after payment is confirmed.
+- Registered payments router in `artifacts/api-server/src/routes/index.ts`.
+
+**API spec & codegen:**
+- Added `CreateOrderInput`, `PaymentOrder`, `PaymentOrderStatus` schemas + `/payments/create-order` (POST) and `/payments/order/{id}` (GET) endpoints to `lib/api-spec/openapi.yaml`.
+- Ran `pnpm --filter @workspace/api-spec run codegen` — new hooks `useCreatePaymentOrder`, `useGetPaymentOrder` generated.
+
+**DB:**
+- `pnpm --filter @workspace/db run push` — `payment_orders` table created successfully.
+
+**Frontend (`artifacts/toplivo/src/pages/catalog.tsx`):**
+- Replaced `useCreateVoucher` with `useCreatePaymentOrder` + `useGetPaymentOrder`.
+- `PaymentStep` state machine: `idle → waiting_payment → confirming → done`.
+- Stars: calls `Telegram.WebApp.openInvoice(url, callback)` — on `paid` callback transitions to `confirming`, polls `GET /payments/order/:id` (2s interval) until `voucherId` appears.
+- CryptoBot: opens `mini_app_invoice_url` via `Telegram.WebApp.openLink()` or browser fallback; polls same endpoint for payment confirmation.
+- Payment waiting screen with animated dots, Stars amount preview, cancel button.
+- Approximate Stars amount shown in buy panel (`totalRub / 2` capped at min 1).
+
+**Telegram webhook registered:**
+- `POST https://api.telegram.org/bot.../setWebhook` → URL: `https://${REPLIT_DEV_DOMAIN}/api/payments/telegram-webhook`, allowed_updates: `pre_checkout_query`, `message`.
+- **NOTE**: Webhook URL uses dev domain. On production deploy, must re-register with production domain.
+
+**Verification:**
+- API server build: ✅ clean build at 2.2mb.
+- DB push: ✅ `payment_orders` table created.
+- Codegen: ✅ new hooks generated, typecheck passed.
+- `POST /api/payments/create-order` (no auth header, dev mock): returns `{"error":"Station not found"}` — auth passes, route reached correctly.
+- Frontend screenshot: catalog page loads with live prices, fuel cards, UI intact.
+
+**Pending / Next steps:**
+- Re-register Telegram webhook on production deploy (dev domain changes).
+- QR code display on voucher detail screen.
+- Voucher redemption (station-side QR scan → mark `used`).
+- Push notifications via Telegram Bot API when voucher < 7 days from expiry.
+- Real market prices (replace hardcoded `Math.random()` in analytics/market endpoints).
+- Admin broadcast: actually call Telegram Bot API (currently logs but never sends).
+
+---
+
 _Next session: append a new `### Session N — YYYY-MM-DD` block above this line._

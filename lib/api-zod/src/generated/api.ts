@@ -245,6 +245,40 @@ export const ActivateVoucherResponse = zod.object({
 
 
 /**
+ * @summary Create a payment order and get an invoice URL
+ */
+export const CreatePaymentOrderBody = zod.object({
+  "stationId": zod.number(),
+  "fuelType": zod.string(),
+  "liters": zod.number(),
+  "paymentMethod": zod.string().describe('stars | crypto')
+})
+
+export const CreatePaymentOrderResponse = zod.object({
+  "orderId": zod.number(),
+  "method": zod.string().describe('stars | crypto'),
+  "invoiceUrl": zod.string(),
+  "webInvoiceUrl": zod.string().nullish(),
+  "totalRub": zod.number(),
+  "starsAmount": zod.number().nullish()
+})
+
+
+/**
+ * @summary Poll payment order status
+ */
+export const GetPaymentOrderParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetPaymentOrderResponse = zod.object({
+  "orderId": zod.number(),
+  "status": zod.string().describe('pending | paid | failed'),
+  "voucherId": zod.number().nullish()
+})
+
+
+/**
  * @summary Get overall analytics summary — savings, market vs locked
  */
 export const GetAnalyticsSummaryResponse = zod.object({

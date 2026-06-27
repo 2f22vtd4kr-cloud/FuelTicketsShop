@@ -24,6 +24,7 @@ import type {
   AnalyticsSummary,
   BroadcastInput,
   BroadcastResult,
+  CreateOrderInput,
   GetMarketComparisonParams,
   GetPriceHistoryParams,
   HealthStatus,
@@ -31,6 +32,8 @@ import type {
   ListStationsParams,
   LivePrices,
   MarketComparison,
+  PaymentOrder,
+  PaymentOrderStatus,
   PriceHistoryPoint,
   Station,
   SupplyMatrixRow,
@@ -906,6 +909,153 @@ export const useActivateVoucher = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getActivateVoucherMutationOptions(options));
     }
+
+export const getCreatePaymentOrderUrl = () => {
+
+
+
+
+  return `/api/payments/create-order`
+}
+
+/**
+ * @summary Create a payment order and get an invoice URL
+ */
+export const createPaymentOrder = async (createOrderInput: CreateOrderInput, options?: RequestInit): Promise<PaymentOrder> => {
+
+  return customFetch<PaymentOrder>(getCreatePaymentOrderUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createOrderInput)
+  }
+);}
+
+
+
+
+export const getCreatePaymentOrderMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPaymentOrder>>, TError,{data: BodyType<CreateOrderInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createPaymentOrder>>, TError,{data: BodyType<CreateOrderInput>}, TContext> => {
+
+const mutationKey = ['createPaymentOrder'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createPaymentOrder>>, {data: BodyType<CreateOrderInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createPaymentOrder(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreatePaymentOrderMutationResult = NonNullable<Awaited<ReturnType<typeof createPaymentOrder>>>
+    export type CreatePaymentOrderMutationBody = BodyType<CreateOrderInput>
+    export type CreatePaymentOrderMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Create a payment order and get an invoice URL
+ */
+export const useCreatePaymentOrder = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPaymentOrder>>, TError,{data: BodyType<CreateOrderInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createPaymentOrder>>,
+        TError,
+        {data: BodyType<CreateOrderInput>},
+        TContext
+      > => {
+      return useMutation(getCreatePaymentOrderMutationOptions(options));
+    }
+
+export const getGetPaymentOrderUrl = (id: number,) => {
+
+
+
+
+  return `/api/payments/order/${id}`
+}
+
+/**
+ * @summary Poll payment order status
+ */
+export const getPaymentOrder = async (id: number, options?: RequestInit): Promise<PaymentOrderStatus> => {
+
+  return customFetch<PaymentOrderStatus>(getGetPaymentOrderUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPaymentOrderQueryKey = (id: number,) => {
+    return [
+    `/api/payments/order/${id}`
+    ] as const;
+    }
+
+
+export const getGetPaymentOrderQueryOptions = <TData = Awaited<ReturnType<typeof getPaymentOrder>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPaymentOrder>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPaymentOrderQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPaymentOrder>>> = ({ signal }) => getPaymentOrder(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPaymentOrder>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPaymentOrderQueryResult = NonNullable<Awaited<ReturnType<typeof getPaymentOrder>>>
+export type GetPaymentOrderQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Poll payment order status
+ */
+
+export function useGetPaymentOrder<TData = Awaited<ReturnType<typeof getPaymentOrder>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPaymentOrder>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPaymentOrderQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getGetAnalyticsSummaryUrl = () => {
 

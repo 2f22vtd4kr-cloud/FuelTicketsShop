@@ -21,6 +21,8 @@ tags:
     description: Analytics and supply matrix
   - name: admin
     description: Admin operations
+  - name: payments
+    description: Payment processing (CryptoBot TON and Telegram Stars)
 paths:
   /healthz:
     get:
@@ -218,6 +220,44 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Voucher"
+
+  /payments/create-order:
+    post:
+      operationId: createPaymentOrder
+      tags: [payments]
+      summary: Create a payment order and get an invoice URL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOrderInput"
+      responses:
+        "200":
+          description: Order created with invoice URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentOrder"
+
+  /payments/order/{id}:
+    get:
+      operationId: getPaymentOrder
+      tags: [payments]
+      summary: Poll payment order status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Order status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentOrderStatus"
 
   /analytics/summary:
     get:
@@ -612,3 +652,47 @@ components:
           type: integer
         failed:
           type: integer
+
+    CreateOrderInput:
+      type: object
+      required: [stationId, fuelType, liters, paymentMethod]
+      properties:
+        stationId:
+          type: integer
+        fuelType:
+          type: string
+        liters:
+          type: number
+        paymentMethod:
+          type: string
+          description: "stars | crypto"
+
+    PaymentOrder:
+      type: object
+      required: [orderId, method, invoiceUrl, totalRub]
+      properties:
+        orderId:
+          type: integer
+        method:
+          type: string
+          description: "stars | crypto"
+        invoiceUrl:
+          type: string
+        webInvoiceUrl:
+          type: ["string", "null"]
+        totalRub:
+          type: number
+        starsAmount:
+          type: ["integer", "null"]
+
+    PaymentOrderStatus:
+      type: object
+      required: [orderId, status]
+      properties:
+        orderId:
+          type: integer
+        status:
+          type: string
+          description: "pending | paid | failed"
+        voucherId:
+          type: ["integer", "null"]
