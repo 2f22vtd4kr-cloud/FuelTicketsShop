@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, stationsTable, fuelPricesTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, and, gte, lte, sql } from "drizzle-orm";
 
 const router = Router();
 
@@ -18,11 +18,38 @@ async function getStationWithPrices(station: any) {
 }
 
 // GET /stations
+// Supports ?latMin=&latMax=&lngMin=&lngMax=&network=&limit=
 router.get("/", async (req, res) => {
   try {
-    const { network, fuelType } = req.query;
-    let stations = await db.select().from(stationsTable);
-    if (network) stations = stations.filter((s) => s.network === network);
+    const { network, latMin, latMax, lngMin, lngMax, limit } = req.query;
+    const maxRows = Math.min(parseInt(limit as string) || 300, 500);
+
+    const conditions: any[] = [eq(stationsTable.isActive, true)];
+    if (network) conditions.push(eq(stationsTable.network, network as string));
+    if (latMin) conditions.push(gte(stationsTable.lat, parseFloat(latMin as string)));
+    if (latMax) conditions.push(lte(stationsTable.lat, parseFloat(latMax as string)));
+    if (lngMin) conditions.push(gte(stationsTable.lng, parseFloat(lngMin as string)));
+    if (lngMax) conditions.push(lte(stationsTable.lng, parseFloat(lngMax as string)));
+
+    const stations = await db
+      .select()
+      .from(stationsTable)
+      .where(and(...conditions))
+      .limit(maxRows);
+
+    // Return lightweight markers (no prices) for map view
+    if (req.query.mapView === "1") {
+      return res.json(stations.map((s) => ({
+        id: s.id,
+        name: s.name,
+        network: s.network,
+        address: s.address,
+        lat: s.lat,
+        lng: s.lng,
+        networkColor: s.networkColor,
+      })));
+    }
+
     const result = await Promise.all(stations.map(getStationWithPrices));
     res.json(result);
   } catch (err) {
