@@ -11,17 +11,21 @@ const MOCK_MAP_STATIONS = [
   { id: 1, x: 20, y: 30 },
   { id: 2, x: 70, y: 15 },
   { id: 3, x: 45, y: 50 },
-  { id: 4, x: 80, y: 80 },
-  { id: 5, x: 15, y: 75 },
-  { id: 6, x: 55, y: 85 },
+  { id: 4, x: 80, y: 75 },
+  { id: 5, x: 15, y: 70 },
+  { id: 6, x: 55, y: 82 },
+  { id: 7, x: 35, y: 20 },
+  { id: 8, x: 60, y: 40 },
+  { id: 9, x: 85, y: 50 },
+  { id: 10, x: 30, y: 60 },
 ];
 
 const NETWORK_COLORS: Record<string, string> = {
-  Lukoil: "#DC2626",
-  Gazprom: "#3B82F6",
-  Rosneft: "#991B1B",
-  Shell: "#F59E0B",
-  Tatneft: "#10B981",
+  "Лукойл": "#DC2626",
+  "Газпром": "#3B82F6",
+  "Роснефть": "#991B1B",
+  "Shell": "#F59E0B",
+  "Татнефть": "#10B981",
 };
 
 export default function MapPage() {
@@ -34,7 +38,7 @@ export default function MapPage() {
   };
 
   return (
-    <div className="w-full h-full relative flex items-center justify-center bg-[#0A0A0F] overflow-hidden">
+    <div className="w-full relative flex items-center justify-center bg-[#0A0A0F] overflow-hidden" style={{ height: "calc(100dvh - 4rem)" }}>
       {/* Background Stylized Map */}
       <div className="absolute inset-0 z-0">
         <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
