@@ -70,7 +70,7 @@ DB push command: `pnpm --filter @workspace/db run push`
 - Crimea entries in the xlsx are car washes/services (no Бензин/ДТ) → **0 fuel stations** from file.
 - Crimea, ДНР, ЛНР, Херсонская, Запорожская stations come entirely from `EXTRA_STATIONS` in `scripts/seed_stations.py` (47 hardcoded entries).
 - Updated seed script to point to new file path.
-- **Seed script has NOT been run yet** — `DATABASE_URL` must be set first. Run: `python3 scripts/seed_stations.py`
+- **Seed script completed successfully on 2026-06-27** → 10,234 stations + 37,075 price rows in DB.
 
 **Seed script details** (`scripts/seed_stations.py`):
 - Source file: `attached_assets/Spisok_AZS_Kardeks_1782580569294.xlsx`
@@ -81,10 +81,9 @@ DB push command: `pnpm --filter @workspace/db run push`
 - Requires `DATABASE_URL` env var.
 
 **Pending / Next steps**:
-- Set `DATABASE_URL` in Replit Secrets if not already set.
-- Run `pip install openpyxl psycopg2 && python3 scripts/seed_stations.py` to seed the database.
 - Set up Replit workflows for `api-server` and `toplivo` frontend so the app runs in preview.
-- Verify `INTERNAL_API_SECRET` env var is set for admin routes.
+- All secrets already set: `DATABASE_URL`, `SESSION_SECRET`, `TELEGRAM_BOT_TOKEN`, `INTERNAL_API_SECRET`, `CRYPTO_BOT_TOKEN`, `ADMIN_TELEGRAM_ID`.
+- DB schema already pushed + seeded — do NOT re-run seed script without intent, it clears all vouchers.
 - Address known issues listed above (auth, broadcast, real market prices).
 
 ---
