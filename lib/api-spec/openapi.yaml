@@ -1,22 +1,32 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: ТОПливо — Fuel Voucher API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: stations
+    description: Fuel stations
+  - name: prices
+    description: Fuel prices
+  - name: vouchers
+    description: Fuel vouchers
+  - name: users
+    description: User management
+  - name: analytics
+    description: Analytics and supply matrix
+  - name: admin
+    description: Admin operations
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,13 +34,581 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /users/auth:
+    post:
+      operationId: authUser
+      tags: [users]
+      summary: Authenticate via Telegram
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TelegramAuthInput"
+      responses:
+        "200":
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /users/me:
+    get:
+      operationId: getMe
+      tags: [users]
+      summary: Get current user profile
+      responses:
+        "200":
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /stations:
+    get:
+      operationId: listStations
+      tags: [stations]
+      summary: List all fuel stations with current prices
+      parameters:
+        - name: network
+          in: query
+          schema:
+            type: string
+        - name: fuelType
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of stations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Station"
+
+  /stations/{id}:
+    get:
+      operationId: getStation
+      tags: [stations]
+      summary: Get station details with current prices
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Station details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Station"
+        "404":
+          description: Not found
+
+  /prices/live:
+    get:
+      operationId: getLivePrices
+      tags: [prices]
+      summary: Get current market prices for all fuel types
+      responses:
+        "200":
+          description: Live prices
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LivePrices"
+
+  /prices/history:
+    get:
+      operationId: getPriceHistory
+      tags: [prices]
+      summary: Get price history for charts
+      parameters:
+        - name: fuelType
+          in: query
+          schema:
+            type: string
+        - name: days
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Price history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PriceHistoryPoint"
+
+  /vouchers:
+    get:
+      operationId: listVouchers
+      tags: [vouchers]
+      summary: Get current user vouchers
+      responses:
+        "200":
+          description: User vouchers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Voucher"
+    post:
+      operationId: createVoucher
+      tags: [vouchers]
+      summary: Purchase a fuel voucher
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VoucherInput"
+      responses:
+        "201":
+          description: Voucher created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Voucher"
+
+  /vouchers/{id}:
+    get:
+      operationId: getVoucher
+      tags: [vouchers]
+      summary: Get voucher details with QR
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Voucher details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Voucher"
+
+  /vouchers/{id}/activate:
+    post:
+      operationId: activateVoucher
+      tags: [vouchers]
+      summary: Activate / use a voucher at the station
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Activated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Voucher"
+
+  /analytics/summary:
+    get:
+      operationId: getAnalyticsSummary
+      tags: [analytics]
+      summary: Get overall analytics summary — savings, market vs locked
+      responses:
+        "200":
+          description: Analytics summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyticsSummary"
+
+  /analytics/supply-matrix:
+    get:
+      operationId: getSupplyMatrix
+      tags: [analytics]
+      summary: Supply availability matrix by network and fuel type
+      responses:
+        "200":
+          description: Supply matrix
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SupplyMatrixRow"
+
+  /analytics/market-comparison:
+    get:
+      operationId: getMarketComparison
+      tags: [analytics]
+      summary: Compare locked price vs live market price for savings calculation
+      parameters:
+        - name: fuelType
+          in: query
+          schema:
+            type: string
+        - name: liters
+          in: query
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Market comparison
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketComparison"
+
+  /admin/stats:
+    get:
+      operationId: getAdminStats
+      tags: [admin]
+      summary: Get admin dashboard statistics
+      responses:
+        "200":
+          description: Admin stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminStats"
+
+  /admin/users:
+    get:
+      operationId: listAdminUsers
+      tags: [admin]
+      summary: List all users
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+
+  /admin/vouchers:
+    get:
+      operationId: listAdminVouchers
+      tags: [admin]
+      summary: List all vouchers
+      responses:
+        "200":
+          description: All vouchers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Voucher"
+
+  /admin/broadcast:
+    post:
+      operationId: sendBroadcast
+      tags: [admin]
+      summary: Send broadcast message to all users via bot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BroadcastInput"
+      responses:
+        "200":
+          description: Broadcast sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BroadcastResult"
+
 components:
   schemas:
     HealthStatus:
       type: object
+      required: [status]
       properties:
         status:
           type: string
-      required:
-        - status
 
+    TelegramAuthInput:
+      type: object
+      required: [telegramId, firstName]
+      properties:
+        telegramId:
+          type: integer
+        firstName:
+          type: string
+        lastName:
+          type: ["string", "null"]
+        username:
+          type: ["string", "null"]
+        photoUrl:
+          type: ["string", "null"]
+
+    User:
+      type: object
+      required: [id, telegramId, firstName, createdAt]
+      properties:
+        id:
+          type: integer
+        telegramId:
+          type: integer
+        firstName:
+          type: string
+        lastName:
+          type: ["string", "null"]
+        username:
+          type: ["string", "null"]
+        photoUrl:
+          type: ["string", "null"]
+        isAdmin:
+          type: boolean
+        totalVouchers:
+          type: integer
+        totalSavings:
+          type: number
+        createdAt:
+          type: string
+
+    Station:
+      type: object
+      required: [id, name, network, address, lat, lng, isActive]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        network:
+          type: string
+          description: "Lukoil | Gazprom | Rosneft | Shell | Tatneft"
+        address:
+          type: string
+        lat:
+          type: number
+        lng:
+          type: number
+        isActive:
+          type: boolean
+        networkColor:
+          type: string
+        prices:
+          type: array
+          items:
+            $ref: "#/components/schemas/FuelPrice"
+
+    FuelPrice:
+      type: object
+      required: [fuelType, pricePerLiter, updatedAt]
+      properties:
+        fuelType:
+          type: string
+          description: "AI-92 | AI-95 | AI-98 | Diesel"
+        pricePerLiter:
+          type: number
+        lockedPrice:
+          type: ["number", "null"]
+        updatedAt:
+          type: string
+
+    LivePrices:
+      type: object
+      required: [updatedAt]
+      properties:
+        ai92:
+          type: number
+        ai95:
+          type: number
+        ai98:
+          type: number
+        diesel:
+          type: number
+        updatedAt:
+          type: string
+        trend:
+          type: string
+          description: "up | down | stable"
+
+    PriceHistoryPoint:
+      type: object
+      required: [date, fuelType, price]
+      properties:
+        date:
+          type: string
+        fuelType:
+          type: string
+        price:
+          type: number
+
+    Voucher:
+      type: object
+      required: [id, userId, stationId, fuelType, liters, pricePerLiter, totalAmount, lockedAt, expiresAt, status]
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        stationId:
+          type: integer
+        stationName:
+          type: string
+        stationNetwork:
+          type: string
+        fuelType:
+          type: string
+        liters:
+          type: number
+        pricePerLiter:
+          type: number
+        totalAmount:
+          type: number
+        lockedAt:
+          type: string
+        expiresAt:
+          type: string
+        status:
+          type: string
+          description: "active | used | expired"
+        qrCode:
+          type: ["string", "null"]
+        savingsAmount:
+          type: ["number", "null"]
+        paymentMethod:
+          type: ["string", "null"]
+
+    VoucherInput:
+      type: object
+      required: [stationId, fuelType, liters, paymentMethod]
+      properties:
+        stationId:
+          type: integer
+        fuelType:
+          type: string
+        liters:
+          type: number
+        paymentMethod:
+          type: string
+          description: "stars | crypto"
+        telegramUserId:
+          type: integer
+
+    AnalyticsSummary:
+      type: object
+      required: [totalVouchers, totalLiters, totalSavings, activeVouchers]
+      properties:
+        totalVouchers:
+          type: integer
+        totalLiters:
+          type: number
+        totalSavings:
+          type: number
+        activeVouchers:
+          type: integer
+        avgSavingsPercent:
+          type: number
+        marketPriceAi95:
+          type: number
+        lockedPriceAi95:
+          type: number
+        priceGrowthSinceLock:
+          type: number
+
+    SupplyMatrixRow:
+      type: object
+      required: [network, ai92, ai95, ai98, diesel, totalStations]
+      properties:
+        network:
+          type: string
+        ai92:
+          type: string
+          description: "available | low | unavailable"
+        ai95:
+          type: string
+        ai98:
+          type: string
+        diesel:
+          type: string
+        totalStations:
+          type: integer
+        networkColor:
+          type: string
+
+    MarketComparison:
+      type: object
+      required: [fuelType, liters, lockedPrice, marketPrice, savings, savingsPercent]
+      properties:
+        fuelType:
+          type: string
+        liters:
+          type: number
+        lockedPrice:
+          type: number
+        marketPrice:
+          type: number
+        lockedTotal:
+          type: number
+        marketTotal:
+          type: number
+        savings:
+          type: number
+        savingsPercent:
+          type: number
+
+    AdminStats:
+      type: object
+      required: [totalUsers, totalVouchers, activeVouchers, totalRevenue]
+      properties:
+        totalUsers:
+          type: integer
+        totalVouchers:
+          type: integer
+        activeVouchers:
+          type: integer
+        usedVouchers:
+          type: integer
+        expiredVouchers:
+          type: integer
+        totalRevenue:
+          type: number
+        totalLitersSold:
+          type: number
+        newUsersToday:
+          type: integer
+        vouchersToday:
+          type: integer
+
+    BroadcastInput:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+        adminSecret:
+          type: string
+
+    BroadcastResult:
+      type: object
+      required: [sent, failed]
+      properties:
+        sent:
+          type: integer
+        failed:
+          type: integer
