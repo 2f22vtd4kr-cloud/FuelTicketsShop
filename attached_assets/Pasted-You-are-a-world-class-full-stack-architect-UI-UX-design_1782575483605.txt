@@ -1,0 +1,101 @@
+You are a world-class full-stack architect, UI/UX designer, and Telegram Mini App specialist. Build from absolute zero a premium "Fuel Tickets RU" Telegram Bot + Mini App that sells fuel vouchers.
+The production name of this app is ТОПливо this word is a logo with ТОП in red letter. 
+### BUSINESS PHILOSOPHY (CORE)
+The entire product sells the idea of protection against inflation: When you buy a voucher, the fuel price is **locked forever** (90 days). At the station you simply show the QR — no extra payment, no indexing. This is the main marketing message everywhere.
+
+All interface in **Russian language only**.
+
+Payments: Telegram Stars + CryptoBot (via CRYPTO_BOT_TOKEN).
+
+### VISUAL & UX PHILOSOPHY (Apple + Night Mercedes)
+- **Atmosphere**: Deep dark theme (#0A0A0F base), premium "night drive in Mercedes" feel. Subtle ambient glows and liquid glass (glassmorphism) effects — blurred backgrounds, frosted cards with vibrant borders.
+- **Color accents**: Dynamic per AZS network (Lukoil — deep red glow, Gazprom — blue, etc.). General accents: neon purple/cyan (#A855F7, #22D3EE).
+- **Style**: Maximum Apple minimalism + modern Liquid Glass. Generous whitespace, large rounded corners (16-24px), subtle shadows/glows, buttery animations.
+- **Mobile-first**: Perfect Telegram Mini App (portrait, safe areas).
+- **Progressive Disclosure**: Never overload the screen. Use collapsible panels, modals, expandable cards. User decides depth of info (tap → expand → full details).
+- **Map**: Tap on station marker → beautiful modal popup with station info. Background map blurs (backdrop-filter). Smooth animations.
+
+Keep/enhance:
+- FastAPI backend (port 8000)
+- React + TypeScript + Vite frontend (port 3001)
+- Python Telegram Bot
+- SQLite → PostgreSQL support
+- WebSocket live prices
+- Voucher system with 90-day lock
+- Admin panel (protected)
+
+### SECRETS (Create these in Replit Secrets)
+- TELEGRAM_BOT_TOKEN
+- INTERNAL_API_SECRET
+- CRYPTO_BOT_TOKEN
+- DATABASE_URL (optional for prod)
+- ADMIN_TELEGRAM_ID
+
+Prompt the user to fill them before first run.
+
+### REQUIRED FEATURES & SCREENS
+
+**1. Telegram Bot (Entry Point)**
+- Beautiful /start with promotional video/GIF just massive letters being typed ТОПливо with ТОП part being in red-rosa letters + "Открыть Мини-приложение" big button.
+- Clean menu with main sections.
+
+**2. Mini App Intro**
+- On first launch: Full-screen cinematic intro app’s name being typed in vertically with biggest letters possible that fit in the user’s screen + "Пропустить" option.
+
+**3. Main Tabs (Bottom Navigation)**
+- Карта (Map)
+- Каталог (Catalog)
+- Аналитика (Analytics / Supply Matrix)
+- Сейф (Vault — My Vouchers)
+- Admin (hidden)
+
+**4. Карта**
+- Interactive map with stations.
+- Colored glowing markers (by availability).
+- Tap → glassmorphic modal with blurred map background: station info, current prices, "Купить талон" button.
+- Filters (slide-up panel).
+
+**5. Каталог**
+- Hero banner emphasizing "Защита от инфляции — цена заморожена на 90 дней".
+- LiveMarketWidget: animated comparison (rising market vs locked price), savings calculator.
+- Fuel items with network-specific glow.
+- Expandable purchase panel.
+
+**6. Аналитика**
+- Supply matrix with clear colored indicators.
+- Price tables, stats, charts.
+
+**7. Сейф**
+- List of user vouchers with QR codes, expiry (color: red/yellow/green), status.
+
+**8. Admin Panel**
+- Hidden, password + Telegram ID protected.
+- All user stats, activity log, voucher management, broadcasts.
+
+### IMPLEMENTATION REQUIREMENTS
+- Use Tailwind + custom CSS for liquid glass effects.
+- GSAP or Framer Motion style animations (smooth expand, glows, ticket fly-ins).
+- Zustand for state (prices, user, vouchers).
+- Full Telegram WebApp SDK integration (theme, back button, haptic).
+- Responsive, performant, no clutter.
+- Real-time updates via WebSocket.
+- Proper error states, loading skeletons, success toasts with animations.
+
+### BUILD SEQUENCE
+1. Initialize full monorepo structure.
+2. Set up backend (FastAPI, models, endpoints, WebSocket, scheduler).
+3. Set up frontend with design system.
+4. Implement bot.
+5. Add all screens with described premium UI/UX.
+6. Integrate payments.
+7. Create start.sh and Replit configs.
+8. Add HANDOFF.md template.
+
+After finishing, output:
+- Summary of created files
+- Instructions to run
+- List of secrets needed
+
+Build the absolute Crème de la crème version — premium, minimalistic, atmospheric, and highly converting fuel voucher store.
+
+BEGIN NOW.
