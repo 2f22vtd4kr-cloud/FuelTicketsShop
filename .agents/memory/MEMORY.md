@@ -1,2 +1,3 @@
 - [HANDOFF.md convention](handoff-convention.md) — mandatory: read at session start, append entry before finishing, every session.
 - [Payment integration](payment-integration.md) — two-phase flow: create order → invoice → webhook confirms → voucher created; never create voucher before payment.
+- [Production hardening decisions](production-hardening.md) — rate limiting, CORS, raw body, auto-webhook, isAdmin sync, price cache, QR code library choices.

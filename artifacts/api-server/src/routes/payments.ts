@@ -157,7 +157,8 @@ router.post("/cryptobot-webhook", async (req, res) => {
     const signature = req.headers["crypto-pay-api-signature"] as string | undefined;
     if (!signature) return res.status(400).json({ error: "Missing signature" });
 
-    const rawBody = JSON.stringify(req.body);
+    // Use raw body captured by express.json verify callback — falls back to re-serialized body
+    const rawBody = (req as any).rawBody?.toString() ?? JSON.stringify(req.body);
     if (!verifyCryptoBotWebhook(rawBody, signature)) {
       return res.status(403).json({ error: "Invalid signature" });
     }

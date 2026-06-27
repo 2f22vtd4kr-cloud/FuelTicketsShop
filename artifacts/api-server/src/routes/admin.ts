@@ -1,27 +1,34 @@
 import { Router } from "express";
 import { db, usersTable, vouchersTable } from "@workspace/db";
-import { eq, gte } from "drizzle-orm";
-import { SendBroadcastBody } from "@workspace/api-zod";
+import { eq } from "drizzle-orm";
+import { requireAuth } from "../middlewares/auth";
+import { sendMessage } from "../lib/telegram-bot";
 
 const router = Router();
 
-function checkAdmin(req: any, res: any): boolean {
-  const secret = req.headers["x-internal-secret"] || req.query.secret;
-  if (secret !== process.env.INTERNAL_API_SECRET) {
-    res.status(403).json({ error: "Forbidden" });
+async function requireAdmin(req: any, res: any): Promise<boolean> {
+  const telegramId = req.telegramId as number | undefined;
+  if (!telegramId) {
+    res.status(401).json({ error: "Unauthorized" });
+    return false;
+  }
+  const users = await db.select().from(usersTable).where(eq(usersTable.telegramId, telegramId)).limit(1);
+  if (!users.length || !users[0].isAdmin) {
+    res.status(403).json({ error: "Forbidden: admin only" });
     return false;
   }
   return true;
 }
 
-// GET /admin/stats
-router.get("/stats", async (req, res) => {
+// GET /admin/stats — requires admin
+router.get("/stats", requireAuth, async (req, res) => {
   try {
-    if (!checkAdmin(req, res)) return;
+    if (!(await requireAdmin(req, res))) return;
 
     const users = await db.select().from(usersTable);
     const vouchers = await db.select().from(vouchersTable);
-    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
     const newUsersToday = users.filter((u) => u.createdAt >= today).length;
     const vouchersToday = vouchers.filter((v) => v.lockedAt >= today).length;
@@ -48,58 +55,78 @@ router.get("/stats", async (req, res) => {
   }
 });
 
-// GET /admin/users
-router.get("/users", async (req, res) => {
+// GET /admin/users — requires admin
+router.get("/users", requireAuth, async (req, res) => {
   try {
-    if (!checkAdmin(req, res)) return;
+    if (!(await requireAdmin(req, res))) return;
+
     const limit = parseInt(req.query.limit as string) || 50;
     const offset = parseInt(req.query.offset as string) || 0;
     const users = await db.select().from(usersTable).limit(limit).offset(offset);
-    res.json(users.map((u) => ({
-      ...u,
-      createdAt: u.createdAt.toISOString(),
-      totalVouchers: 0,
-      totalSavings: 0,
-    })));
+
+    res.json(
+      users.map((u) => ({
+        ...u,
+        createdAt: u.createdAt.toISOString(),
+        totalVouchers: 0,
+        totalSavings: 0,
+      }))
+    );
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// GET /admin/vouchers
-router.get("/vouchers", async (req, res) => {
+// GET /admin/vouchers — requires admin
+router.get("/vouchers", requireAuth, async (req, res) => {
   try {
-    if (!checkAdmin(req, res)) return;
+    if (!(await requireAdmin(req, res))) return;
+
     const vouchers = await db.select().from(vouchersTable);
-    res.json(vouchers.map((v) => ({
-      ...v,
-      lockedAt: v.lockedAt.toISOString(),
-      expiresAt: v.expiresAt.toISOString(),
-      stationName: "АЗС",
-      stationNetwork: "Неизвестно",
-      savingsAmount: null,
-    })));
+    res.json(
+      vouchers.map((v) => ({
+        ...v,
+        lockedAt: v.lockedAt.toISOString(),
+        expiresAt: v.expiresAt.toISOString(),
+        stationName: "АЗС",
+        stationNetwork: "Неизвестно",
+        savingsAmount: null,
+      }))
+    );
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
-// POST /admin/broadcast
-router.post("/broadcast", async (req, res) => {
+// POST /admin/broadcast — requires admin; actually sends Telegram messages
+router.post("/broadcast", requireAuth, async (req, res) => {
   try {
-    const parsed = SendBroadcastBody.safeParse(req.body);
-    if (!parsed.success) return res.status(400).json({ error: "Invalid input" });
+    if (!(await requireAdmin(req, res))) return;
 
-    const { adminSecret, message } = parsed.data;
-    if (adminSecret !== process.env.INTERNAL_API_SECRET) {
-      return res.status(403).json({ error: "Forbidden" });
+    const { message } = req.body as { message?: string };
+    if (!message?.trim()) {
+      return res.status(400).json({ error: "message is required" });
     }
 
     const users = await db.select().from(usersTable);
-    // In production: iterate users and send via bot API
-    res.json({ sent: users.length, failed: 0 });
+
+    let sent = 0;
+    let failed = 0;
+
+    // Send sequentially to avoid hitting Bot API rate limits
+    for (const user of users) {
+      try {
+        await sendMessage(user.telegramId, message);
+        sent++;
+      } catch (err) {
+        failed++;
+        console.error(`Failed to send message to ${user.telegramId}:`, err instanceof Error ? err.message : err);
+      }
+    }
+
+    res.json({ sent, failed });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });

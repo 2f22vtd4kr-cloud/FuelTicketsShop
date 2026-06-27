@@ -186,4 +186,67 @@ DB push command: `pnpm --filter @workspace/db run push`
 
 ---
 
+### Session 4 — 2026-06-27
+
+**Status at start**: Payment integration complete. All the following were known stubs/gaps.
+
+**What was done — Production-readiness pass**:
+
+**Admin broadcast — actually sends Telegram messages**:
+- Added `sendMessage(chatId, text)` to `artifacts/api-server/src/lib/telegram-bot.ts`.
+- Rewrote `POST /admin/broadcast` in `admin.ts` to iterate all users, call `sendMessage(user.telegramId, message)`, and return real `{ sent, failed }` counts.
+- Removed old `adminSecret`/`INTERNAL_API_SECRET` check from broadcast route.
+- All admin routes (`/stats`, `/users`, `/vouchers`, `/broadcast`) now use `requireAuth` middleware + `isAdmin` DB check. Old `x-internal-secret` pattern removed.
+
+**Real market prices from DB**:
+- Created `artifacts/api-server/src/lib/market-prices.ts`:
+  - `getMarketPrices()` — queries `fuelPricesTable`, computes AVG per fuel type (`AI-92 → ai92` etc.), caches in memory for 5 min. Falls back to hardcoded constants if DB is empty.
+  - `seedPriceHistoryIfEmpty()` — if `price_history` table is empty, generates 30 days of synthetic price history (based on real DB averages + small drift) and inserts it. Called on server startup.
+- `prices.ts` — replaced `Math.random()` noise with `getMarketPrices()`.
+- `analytics.ts` — replaced hardcoded 61.2/56.8 constants with real DB averages. `/summary` uses actual average `pricePerLiter` from AI-95 vouchers for locked price. `/market-comparison` uses real prices with a 7% discount as locked price.
+
+**Admin auth hardening**:
+- `users.ts` — fixed: `isAdmin` is now also set on UPDATE (previously only on INSERT). This means the `ADMIN_TELEGRAM_ID` env var takes effect immediately on next login even for existing users.
+- `admin.tsx` — removed hardcoded PIN "1234" entirely. Gate is now purely `user?.isAdmin` from DB. Non-admin users see a locked-screen message.
+
+**Real QR codes in vault**:
+- Installed `qrcode.react` in `artifacts/toplivo`.
+- `vault.tsx` — replaced fake `<QrCode>` lucide icon with `<QRCodeSVG value={selectedVoucher.qrCode} size={200} level="M" />`. Shows the actual `TOPLIVO-{id}-{hex}` code string as a scannable QR. Falls back to icon if `qrCode` is null.
+
+**Voucher auto-expiry**:
+- `vouchers.ts` — `GET /vouchers` now calls `autoExpireVouchers(userId)` before returning. Uses `lt(expiresAt, now)` to bulk-update active vouchers past their expiry date to `"expired"` status.
+
+**Rate limiting**:
+- Installed `express-rate-limit` in `artifacts/api-server`.
+- `app.ts` — general limit: 200 req/min per IP on `/api/*`. Strict limit: 15 req/min on `/api/payments/create-order`. Both limits skip in dev (`NODE_ENV !== production`).
+
+**CORS hardening**:
+- `app.ts` — in production, CORS origin is restricted to `web.telegram.org`, `webk.telegram.org`, `webz.telegram.org`. Dev: all origins allowed (same as before).
+
+**CryptoBot webhook raw body fix**:
+- `app.ts` — `express.json()` now uses `verify: (req, _res, buf) => { req.rawBody = buf; }` to capture the raw Buffer before parsing.
+- `payments.ts` CryptoBot handler — `const rawBody = (req as any).rawBody?.toString() ?? JSON.stringify(req.body)`. This ensures HMAC-SHA256 signature verification uses the actual bytes CryptoBot signed, not re-serialized JSON.
+
+**Auto-register Telegram webhook on startup**:
+- `index.ts` — `onStartup()` is called after server binds. It:
+  1. Seeds price history if empty.
+  2. Constructs webhook URL from `BOT_WEBHOOK_URL` env var (production override) or `REPLIT_DEV_DOMAIN` (dev fallback), then calls `setWebhook()`.
+- Confirmed working: webhook registered at startup pointing to current dev domain.
+
+**Packages installed**:
+- `express-rate-limit` → `artifacts/api-server`
+- `qrcode.react` → `artifacts/toplivo`
+
+**Verification**:
+- API server build: ✅ 2.3mb clean build.
+- Server starts and logs `"Telegram webhook registered"` at startup. ✅
+- Vite HMR picked up vault.tsx + admin.tsx changes, optimized qrcode.react dependency. ✅
+
+**Pending / Next steps**:
+- Push notifications: send Telegram Bot message when voucher < 7 days from expiry (needs a scheduled/cron job or on-demand check).
+- Voucher redemption endpoint (station-side QR scan → validate + mark `used`).
+- Production deploy: `BOT_WEBHOOK_URL` env var should be set to the production domain after deploy (or it will auto-detect from `REPLIT_DEV_DOMAIN` which changes every session).
+
+---
+
 _Next session: append a new `### Session N — YYYY-MM-DD` block above this line._

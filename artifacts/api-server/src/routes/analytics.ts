@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { db, vouchersTable, stationsTable } from "@workspace/db";
+import { getMarketPrices } from "../lib/market-prices";
 
 const router = Router();
 
@@ -11,23 +12,53 @@ const NETWORK_COLORS: Record<string, string> = {
   "Shell": "#F59E0B",
   "Татнефть": "#10B981",
 };
-const FUEL_TYPES = ["AI-92", "AI-95", "AI-98", "Diesel"];
+
+const FUEL_KEY_TO_TYPE: Record<string, string> = {
+  ai92: "AI-92",
+  ai95: "AI-95",
+  ai98: "AI-98",
+  diesel: "Diesel",
+};
 
 // GET /analytics/summary
 router.get("/summary", async (_req, res) => {
   try {
-    const vouchers = await db.select().from(vouchersTable);
+    const [vouchers, prices] = await Promise.all([
+      db.select().from(vouchersTable),
+      getMarketPrices(),
+    ]);
+
     const totalVouchers = vouchers.length;
     const totalLiters = vouchers.reduce((s, v) => s + v.liters, 0);
     const activeVouchers = vouchers.filter((v) => v.status === "active").length;
-    const marketAi95 = 61.2;
-    const lockedAi95 = 56.8;
-    const priceGrowth = +((marketAi95 - lockedAi95) / lockedAi95 * 100).toFixed(1);
+
+    const marketAi95 = prices.ai95;
+
+    // Compute average locked price across all AI-95 vouchers (fallback to market - margin)
+    const ai95Vouchers = vouchers.filter((v) => v.fuelType === "AI-95");
+    const lockedAi95 = ai95Vouchers.length > 0
+      ? +(ai95Vouchers.reduce((s, v) => s + Number(v.pricePerLiter), 0) / ai95Vouchers.length).toFixed(2)
+      : +(marketAi95 * 0.93).toFixed(2);
+
+    const priceGrowth = lockedAi95 > 0
+      ? +((marketAi95 - lockedAi95) / lockedAi95 * 100).toFixed(1)
+      : 0;
+
+    // Compute total savings across all vouchers based on current market prices
+    let totalSavings = 0;
+    for (const v of vouchers) {
+      const fuelKey = Object.keys(FUEL_KEY_TO_TYPE).find(
+        (k) => FUEL_KEY_TO_TYPE[k] === v.fuelType
+      ) as keyof typeof prices | undefined;
+      const market = fuelKey ? (prices[fuelKey as keyof typeof prices] as number) : marketAi95;
+      const locked = Number(v.pricePerLiter);
+      totalSavings += (market - locked) * v.liters;
+    }
 
     res.json({
       totalVouchers,
       totalLiters: +totalLiters.toFixed(1),
-      totalSavings: +(totalLiters * (marketAi95 - lockedAi95)).toFixed(2),
+      totalSavings: +totalSavings.toFixed(2),
       activeVouchers,
       avgSavingsPercent: priceGrowth,
       marketPriceAi95: marketAi95,
@@ -69,15 +100,21 @@ router.get("/market-comparison", async (req, res) => {
     const fuelType = (req.query.fuelType as string) || "AI-95";
     const liters = parseFloat(req.query.liters as string) || 50;
 
-    const lockedPrices: Record<string, number> = {
-      "AI-92": 48.5, "AI-95": 56.8, "AI-98": 63.4, "Diesel": 54.2,
-    };
-    const marketPrices: Record<string, number> = {
-      "AI-92": 52.3, "AI-95": 61.2, "AI-98": 68.9, "Diesel": 58.7,
+    const prices = await getMarketPrices();
+
+    const fuelKeyMap: Record<string, keyof typeof prices> = {
+      "AI-92": "ai92",
+      "AI-95": "ai95",
+      "AI-98": "ai98",
+      "Diesel": "diesel",
     };
 
-    const lockedPrice = lockedPrices[fuelType] ?? 56.8;
-    const marketPrice = marketPrices[fuelType] ?? 61.2;
+    const key = fuelKeyMap[fuelType] ?? "ai95";
+    const marketPrice = prices[key] as number;
+
+    // Locked price: apply a 7% discount to represent the locked-in benefit
+    const lockedPrice = +(marketPrice * 0.93).toFixed(2);
+
     const savings = +((marketPrice - lockedPrice) * liters).toFixed(2);
     const savingsPercent = +((marketPrice - lockedPrice) / lockedPrice * 100).toFixed(1);
 

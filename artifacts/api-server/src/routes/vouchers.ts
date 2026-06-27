@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, vouchersTable, stationsTable, usersTable, fuelPricesTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, and, lt } from "drizzle-orm";
 import { CreateVoucherBody } from "@workspace/api-zod";
 import crypto from "crypto";
 import { requireAuth } from "../middlewares/auth";
@@ -9,6 +9,20 @@ const router = Router();
 
 function genQrCode(voucherId: number): string {
   return `TOPLIVO-${voucherId}-${crypto.randomBytes(6).toString("hex").toUpperCase()}`;
+}
+
+async function autoExpireVouchers(userId: number) {
+  const now = new Date();
+  await db
+    .update(vouchersTable)
+    .set({ status: "expired" })
+    .where(
+      and(
+        eq(vouchersTable.userId, userId),
+        eq(vouchersTable.status, "active"),
+        lt(vouchersTable.expiresAt, now)
+      )
+    );
 }
 
 async function enrichVoucher(v: any) {
@@ -39,10 +53,15 @@ router.get("/", requireAuth, async (req, res) => {
 
     if (!users.length) return res.json([]);
 
+    const userId = users[0].id;
+
+    // Auto-mark expired vouchers before returning
+    await autoExpireVouchers(userId);
+
     const vouchers = await db
       .select()
       .from(vouchersTable)
-      .where(eq(vouchersTable.userId, users[0].id));
+      .where(eq(vouchersTable.userId, userId));
 
     const enriched = await Promise.all(vouchers.map(enrichVoucher));
     res.json(enriched);
@@ -78,7 +97,6 @@ router.post("/", requireAuth, async (req, res) => {
 
     if (!station.length) return res.status(404).json({ error: "Station not found" });
 
-    // Look up the actual price for this station + fuel type
     const prices = await db
       .select()
       .from(fuelPricesTable)
@@ -133,7 +151,6 @@ router.get("/:id", requireAuth, async (req, res) => {
 
     if (!vouchers.length) return res.status(404).json({ error: "Not found" });
 
-    // Ownership check — only owner can view
     const telegramId = req.telegramId!;
     const users = await db
       .select()

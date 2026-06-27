@@ -16,9 +16,17 @@ async function callBotApi<T>(method: string, body: Record<string, unknown>): Pro
 
   const data = await res.json() as { ok: boolean; result: T; description?: string };
   if (!data.ok) {
-    throw new Error(`Telegram Bot API error: ${data.description}`);
+    throw new Error(`Telegram Bot API error [${method}]: ${data.description}`);
   }
   return data.result;
+}
+
+export async function sendMessage(chatId: number, text: string): Promise<void> {
+  await callBotApi("sendMessage", {
+    chat_id: chatId,
+    text,
+    parse_mode: "HTML",
+  });
 }
 
 export async function createStarsInvoiceLink(params: {

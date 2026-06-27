@@ -18,7 +18,6 @@ router.post("/auth", async (req, res) => {
     const initData = req.headers["x-telegram-initdata"] as string | undefined;
 
     if (initData && initData.trim() !== "") {
-      // Validate signature and extract user from initData
       const validated = validateTelegramInitData(initData);
       telegramId = validated.user.id;
       firstName = validated.user.first_name;
@@ -26,7 +25,6 @@ router.post("/auth", async (req, res) => {
       username = validated.user.username;
       photoUrl = validated.user.photo_url;
     } else if (process.env.NODE_ENV !== "production") {
-      // Dev fallback — trust body fields
       const body = req.body;
       if (!body.telegramId || !body.firstName) {
         return res.status(400).json({ error: "telegramId and firstName required" });
@@ -44,6 +42,8 @@ router.post("/auth", async (req, res) => {
       ? parseInt(process.env.ADMIN_TELEGRAM_ID)
       : null;
 
+    const isAdmin = adminId !== null && telegramId === adminId;
+
     const existing = await db
       .select()
       .from(usersTable)
@@ -51,6 +51,7 @@ router.post("/auth", async (req, res) => {
       .limit(1);
 
     if (existing.length > 0) {
+      // Always sync isAdmin so ADMIN_TELEGRAM_ID changes take effect on next login
       const updated = await db
         .update(usersTable)
         .set({
@@ -58,6 +59,7 @@ router.post("/auth", async (req, res) => {
           lastName: lastName ?? null,
           username: username ?? null,
           photoUrl: photoUrl ?? null,
+          isAdmin,
         })
         .where(eq(usersTable.telegramId, telegramId))
         .returning();
@@ -78,7 +80,6 @@ router.post("/auth", async (req, res) => {
       });
     }
 
-    const isAdmin = adminId !== null && telegramId === adminId;
     const inserted = await db
       .insert(usersTable)
       .values({

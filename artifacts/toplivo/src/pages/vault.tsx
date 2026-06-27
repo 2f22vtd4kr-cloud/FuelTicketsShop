@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useListVouchers, useActivateVoucher } from "@workspace/api-client-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { QrCode, Clock, Droplet, ArrowRight, ShieldCheck } from "lucide-react";
+import { QrCode, Clock, ShieldCheck, Wallet } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import type { Voucher } from "@workspace/api-client-react/src/generated/api.schemas";
@@ -14,7 +15,7 @@ export default function VaultPage() {
 
   const handleActivate = () => {
     if (!selectedVoucher) return;
-    
+
     activateVoucher({ data: { voucherId: selectedVoucher.id } }, {
       onSuccess: () => {
         toast({ title: "Успешно", description: "Талон активирован! Покажите QR-код кассиру." });
@@ -28,14 +29,14 @@ export default function VaultPage() {
   };
 
   const getUrgencyColor = (expiresAt: string) => {
-    const days = Math.floor((new Date(expiresAt).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+    const days = Math.floor((new Date(expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
     if (days < 7) return "text-red-400";
     if (days < 30) return "text-yellow-400";
     return "text-green-400";
   };
 
-  const activeVouchers = vouchers?.filter(v => v.status === 'active') || [];
-  const usedVouchers = vouchers?.filter(v => v.status !== 'active') || [];
+  const activeVouchers = vouchers?.filter(v => v.status === "active") || [];
+  const usedVouchers = vouchers?.filter(v => v.status !== "active") || [];
 
   return (
     <div className="w-full min-h-full p-4 pt-6 pb-24 relative">
@@ -49,7 +50,7 @@ export default function VaultPage() {
 
       {isLoading ? (
         <div className="flex flex-col gap-4">
-          {[1,2,3].map(i => (
+          {[1, 2, 3].map(i => (
             <div key={i} className="h-32 rounded-2xl glass-panel animate-pulse bg-white/5" />
           ))}
         </div>
@@ -78,7 +79,7 @@ export default function VaultPage() {
               onClick={() => setSelectedVoucher(voucher)}
             >
               <div className="absolute top-0 right-0 w-24 h-24 bg-primary/10 blur-2xl rounded-full -mr-10 -mt-10" />
-              
+
               <div className="flex justify-between items-start mb-4 relative z-10">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
@@ -94,7 +95,7 @@ export default function VaultPage() {
                   <QrCode className="w-8 h-8 opacity-70" />
                 </div>
               </div>
-              
+
               <div className="flex justify-between items-end relative z-10 pt-4 border-t border-white/10">
                 <div>
                   <div className="text-[10px] text-white/40 uppercase tracking-widest mb-1">Заморожено по</div>
@@ -104,7 +105,7 @@ export default function VaultPage() {
                   <div className="text-[10px] text-white/40 uppercase tracking-widest mb-1">Действует до</div>
                   <div className={`font-medium text-sm flex items-center gap-1 ${getUrgencyColor(voucher.expiresAt)}`}>
                     <Clock className="w-3 h-3" />
-                    {new Date(voucher.expiresAt).toLocaleDateString('ru-RU')}
+                    {new Date(voucher.expiresAt).toLocaleDateString("ru-RU")}
                   </div>
                 </div>
               </div>
@@ -119,10 +120,10 @@ export default function VaultPage() {
                   <div key={voucher.id} className="glass-panel rounded-xl p-4 opacity-50 flex justify-between items-center grayscale">
                     <div>
                       <div className="font-medium">{voucher.fuelType} • {voucher.liters}л</div>
-                      <div className="text-xs mt-1">{new Date(voucher.lockedAt).toLocaleDateString('ru-RU')}</div>
+                      <div className="text-xs mt-1">{new Date(voucher.lockedAt).toLocaleDateString("ru-RU")}</div>
                     </div>
                     <div className="text-sm border border-white/20 px-2 py-1 rounded">
-                      {voucher.status === 'used' ? 'Использован' : 'Истек'}
+                      {voucher.status === "used" ? "Использован" : "Истек"}
                     </div>
                   </div>
                 ))}
@@ -132,7 +133,7 @@ export default function VaultPage() {
         </div>
       )}
 
-      {/* Full Voucher Modal */}
+      {/* Full Voucher Modal with real scannable QR code */}
       <AnimatePresence>
         {selectedVoucher && (
           <>
@@ -155,24 +156,40 @@ export default function VaultPage() {
                   ✕
                 </Button>
               </div>
-              
+
               <div className="flex-1 overflow-y-auto p-6 flex flex-col items-center">
-                <div className="w-full text-center mb-8">
+                <div className="w-full text-center mb-6">
                   <div className="text-sm text-white/50 mb-1">{selectedVoucher.stationNetwork}</div>
                   <div className="text-4xl font-black mb-2">{selectedVoucher.fuelType}</div>
                   <div className="text-2xl font-bold text-cyan-400">{selectedVoucher.liters} литров</div>
                 </div>
 
-                {/* Styled Mock QR */}
-                <div className="w-64 h-64 bg-white rounded-2xl p-4 mb-8 flex items-center justify-center relative shadow-[0_0_40px_rgba(255,255,255,0.2)]">
-                  <div className="absolute inset-2 border-4 border-black/10 rounded-xl" />
-                  <QrCode className="w-full h-full text-black" />
+                {/* Real scannable QR code */}
+                <div className="bg-white rounded-2xl p-5 mb-6 shadow-[0_0_40px_rgba(255,255,255,0.15)]">
+                  {selectedVoucher.qrCode ? (
+                    <QRCodeSVG
+                      value={selectedVoucher.qrCode}
+                      size={200}
+                      level="M"
+                      includeMargin={false}
+                    />
+                  ) : (
+                    <div className="w-[200px] h-[200px] flex items-center justify-center">
+                      <QrCode className="w-24 h-24 text-black/30" />
+                    </div>
+                  )}
                 </div>
-                
-                <div className="w-full space-y-4 mb-8 bg-white/5 p-4 rounded-xl border border-white/10">
+
+                {selectedVoucher.qrCode && (
+                  <p className="text-[10px] text-white/30 mb-6 font-mono tracking-wider">
+                    {selectedVoucher.qrCode}
+                  </p>
+                )}
+
+                <div className="w-full space-y-4 mb-6 bg-white/5 p-4 rounded-xl border border-white/10">
                   <div className="flex justify-between">
                     <span className="text-white/50">Станция</span>
-                    <span className="font-medium text-right">{selectedVoucher.stationName}</span>
+                    <span className="font-medium text-right max-w-[55%] text-sm">{selectedVoucher.stationName}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-white/50">Цена фиксации</span>
@@ -180,7 +197,9 @@ export default function VaultPage() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-white/50">Действует до</span>
-                    <span className="font-medium">{new Date(selectedVoucher.expiresAt).toLocaleDateString('ru-RU')}</span>
+                    <span className={`font-medium ${getUrgencyColor(selectedVoucher.expiresAt)}`}>
+                      {new Date(selectedVoucher.expiresAt).toLocaleDateString("ru-RU")}
+                    </span>
                   </div>
                   {selectedVoucher.savingsAmount && (
                     <div className="flex justify-between pt-3 border-t border-white/10">
@@ -190,9 +209,9 @@ export default function VaultPage() {
                   )}
                 </div>
               </div>
-              
+
               <div className="p-6 pt-0 border-t border-white/10 mt-auto bg-black/20">
-                <Button 
+                <Button
                   onClick={handleActivate}
                   disabled={isActivating}
                   className="w-full h-14 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white font-bold text-lg mt-4 shadow-[0_0_20px_rgba(34,211,238,0.4)] border-0"
@@ -210,6 +229,3 @@ export default function VaultPage() {
     </div>
   );
 }
-
-// Icon for empty state since we didn't import Wallet above
-import { Wallet } from "lucide-react";
