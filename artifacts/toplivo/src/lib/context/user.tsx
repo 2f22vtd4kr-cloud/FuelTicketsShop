@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { useAuthUser } from "@workspace/api-client-react";
+import { useAuthUser, setDefaultHeader } from "@workspace/api-client-react";
 import type { User } from "@workspace/api-client-react/src/generated/api.schemas";
 
 interface UserContextType {
@@ -14,14 +14,23 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const authMutation = useAuthUser();
 
   useEffect(() => {
-    // Get mock Telegram data or fallback
     // @ts-ignore
-    const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user || {
+    const tg = window.Telegram?.WebApp;
+    const initData: string = tg?.initData ?? "";
+
+    // @ts-ignore
+    const tgUser = tg?.initDataUnsafe?.user || {
       id: 12345,
       first_name: "Иван",
       last_name: "Иванов",
       username: "ivanov",
     };
+
+    // Set the initData header globally on the API client so all
+    // subsequent requests (vouchers, etc.) are authenticated.
+    if (initData) {
+      setDefaultHeader("x-telegram-initdata", initData);
+    }
 
     authMutation.mutate(
       {
@@ -38,7 +47,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         },
       }
     );
-  }, []); // Only run once on mount
+  }, []);
 
   return (
     <UserContext.Provider value={{ user, isLoading: authMutation.isPending }}>

@@ -99,4 +99,37 @@ DB push command: `pnpm --filter @workspace/db run push`
 
 ---
 
+### Session 2 — 2026-06-27
+
+**Status at start**: Auth was still insecure (`x-telegram-id` header, no validation). Files `telegram-auth.ts` and `auth.ts` were created but routes/frontend not yet updated.
+
+**What was done**:
+- Rewrote `artifacts/api-server/src/routes/users.ts` — `/auth` now validates initData via HMAC-SHA256 (or falls back to body fields in dev); `/me` protected by `requireAuth` middleware.
+- Rewrote `artifacts/api-server/src/routes/vouchers.ts` — all routes (`GET /`, `POST /`, `GET /:id`, `POST /:id/activate`) protected by `requireAuth` with ownership checks.
+- Added `setDefaultHeader(name, value)` to `lib/api-client-react/src/custom-fetch.ts` — sets module-level headers on every API request.
+- Exported `setDefaultHeader` from `lib/api-client-react/src/index.ts`.
+- Rewrote `artifacts/toplivo/src/lib/context/user.tsx` — calls `setDefaultHeader("x-telegram-initdata", initData)` before the auth mutation so all subsequent API calls carry the Telegram auth header automatically.
+- Rebuilt API server (`pnpm --filter @workspace/api-server run build`) and restarted workflow.
+
+**Verification**:
+- `POST /api/users/auth` (dev body fallback) → 200, correct user returned.
+- `GET /api/users/me` (dev mock, no header) → 200.
+- `GET /api/users/me` (invalid initData hash) → 401 `Invalid hash — initData tampered or from wrong bot`.
+- App screenshot: map loads correctly with 329 clustered stations, no browser console errors.
+
+**Auth flow summary**:
+- Real Telegram context: `window.Telegram.WebApp.initData` → `x-telegram-initdata` header → HMAC-SHA256 validated server-side.
+- Dev (NODE_ENV ≠ production, no header): mock user `{id: 12345, firstName: "Иван"}`.
+- Invalid/expired initData (> 24h): 401 rejected.
+
+**Pending / Next steps**:
+- Payment integration: CryptoBot (`CRYPTO_BOT_TOKEN` set) — wire up TON payment before voucher creation.
+- QR code display on voucher detail screen.
+- Voucher redemption endpoint (station-side QR scan → mark `used`).
+- Push notifications via Telegram Bot API when voucher < 7 days from expiry.
+- Real market prices (replace hardcoded `Math.random()` in analytics/market endpoints).
+- Admin broadcast: actually call Telegram Bot API (currently lists users but never sends).
+
+---
+
 _Next session: append a new `### Session N — YYYY-MM-DD` block above this line._

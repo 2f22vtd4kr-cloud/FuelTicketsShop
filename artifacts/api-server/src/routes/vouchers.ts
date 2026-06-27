@@ -1,8 +1,9 @@
 import { Router } from "express";
-import { db, vouchersTable, stationsTable, usersTable } from "@workspace/db";
+import { db, vouchersTable, stationsTable, usersTable, fuelPricesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { CreateVoucherBody } from "@workspace/api-zod";
 import crypto from "crypto";
+import { requireAuth } from "../middlewares/auth";
 
 const router = Router();
 
@@ -11,7 +12,11 @@ function genQrCode(voucherId: number): string {
 }
 
 async function enrichVoucher(v: any) {
-  const station = await db.select().from(stationsTable).where(eq(stationsTable.id, v.stationId)).limit(1);
+  const station = await db
+    .select()
+    .from(stationsTable)
+    .where(eq(stationsTable.id, v.stationId))
+    .limit(1);
   return {
     ...v,
     lockedAt: v.lockedAt.toISOString(),
@@ -22,19 +27,23 @@ async function enrichVoucher(v: any) {
   };
 }
 
-// GET /vouchers — user vouchers by telegramId header
-router.get("/", async (req, res) => {
+// GET /vouchers — requires auth
+router.get("/", requireAuth, async (req, res) => {
   try {
-    const telegramIdHeader = req.headers["x-telegram-id"];
-    if (!telegramIdHeader) {
-      // return demo vouchers for testing
-      return res.json([]);
-    }
-    const telegramId = parseInt(telegramIdHeader as string);
-    const users = await db.select().from(usersTable).where(eq(usersTable.telegramId, telegramId)).limit(1);
+    const telegramId = req.telegramId!;
+    const users = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.telegramId, telegramId))
+      .limit(1);
+
     if (!users.length) return res.json([]);
 
-    const vouchers = await db.select().from(vouchersTable).where(eq(vouchersTable.userId, users[0].id));
+    const vouchers = await db
+      .select()
+      .from(vouchersTable)
+      .where(eq(vouchersTable.userId, users[0].id));
+
     const enriched = await Promise.all(vouchers.map(enrichVoucher));
     res.json(enriched);
   } catch (err) {
@@ -43,47 +52,66 @@ router.get("/", async (req, res) => {
   }
 });
 
-// POST /vouchers — purchase a voucher
-router.post("/", async (req, res) => {
+// POST /vouchers — requires auth, looks up user from validated telegramId
+router.post("/", requireAuth, async (req, res) => {
   try {
     const parsed = CreateVoucherBody.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: "Invalid input" });
 
-    const { stationId, fuelType, liters, paymentMethod, telegramUserId } = parsed.data;
+    const { stationId, fuelType, liters, paymentMethod } = parsed.data;
+    const telegramId = req.telegramId!;
 
-    // Get or create user
-    let userId: number;
-    if (telegramUserId) {
-      const users = await db.select().from(usersTable).where(eq(usersTable.telegramId, telegramUserId)).limit(1);
-      if (!users.length) return res.status(404).json({ error: "User not found" });
-      userId = users[0].id;
-    } else {
-      return res.status(400).json({ error: "telegramUserId required" });
-    }
+    const users = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.telegramId, telegramId))
+      .limit(1);
 
-    // Get station prices
-    const station = await db.select().from(stationsTable).where(eq(stationsTable.id, stationId)).limit(1);
+    if (!users.length) return res.status(404).json({ error: "User not found. Please authenticate first." });
+    const userId = users[0].id;
+
+    const station = await db
+      .select()
+      .from(stationsTable)
+      .where(eq(stationsTable.id, stationId))
+      .limit(1);
+
     if (!station.length) return res.status(404).json({ error: "Station not found" });
 
-    const pricePerLiter = 56.8; // locked price (AI-95 base)
+    // Look up the actual price for this station + fuel type
+    const prices = await db
+      .select()
+      .from(fuelPricesTable)
+      .where(eq(fuelPricesTable.stationId, stationId))
+      .limit(10);
+
+    const matchedPrice = prices.find((p: { fuelType: string; pricePerLiter: unknown }) => p.fuelType === fuelType);
+    const pricePerLiter = matchedPrice ? Number(matchedPrice.pricePerLiter) : 56.8;
     const totalAmount = +(pricePerLiter * liters).toFixed(2);
     const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000);
 
-    const inserted = await db.insert(vouchersTable).values({
-      userId,
-      stationId,
-      fuelType,
-      liters,
-      pricePerLiter,
-      totalAmount,
-      expiresAt,
-      status: "active",
-      paymentMethod: paymentMethod ?? null,
-    }).returning();
+    const inserted = await db
+      .insert(vouchersTable)
+      .values({
+        userId,
+        stationId,
+        fuelType,
+        liters,
+        pricePerLiter,
+        totalAmount,
+        expiresAt,
+        status: "active",
+        paymentMethod: paymentMethod ?? null,
+      })
+      .returning();
 
     const voucher = inserted[0];
     const qrCode = genQrCode(voucher.id);
-    const updated = await db.update(vouchersTable).set({ qrCode }).where(eq(vouchersTable.id, voucher.id)).returning();
+    const updated = await db
+      .update(vouchersTable)
+      .set({ qrCode })
+      .where(eq(vouchersTable.id, voucher.id))
+      .returning();
 
     const enriched = await enrichVoucher(updated[0]);
     res.status(201).json(enriched);
@@ -94,11 +122,29 @@ router.post("/", async (req, res) => {
 });
 
 // GET /vouchers/:id
-router.get("/:id", async (req, res) => {
+router.get("/:id", requireAuth, async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
-    const vouchers = await db.select().from(vouchersTable).where(eq(vouchersTable.id, id)).limit(1);
+    const id = parseInt(String(req.params.id));
+    const vouchers = await db
+      .select()
+      .from(vouchersTable)
+      .where(eq(vouchersTable.id, id))
+      .limit(1);
+
     if (!vouchers.length) return res.status(404).json({ error: "Not found" });
+
+    // Ownership check — only owner can view
+    const telegramId = req.telegramId!;
+    const users = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.telegramId, telegramId))
+      .limit(1);
+
+    if (!users.length || vouchers[0].userId !== users[0].id) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
     const enriched = await enrichVoucher(vouchers[0]);
     res.json(enriched);
   } catch (err) {
@@ -107,15 +153,35 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// POST /vouchers/:id/activate
-router.post("/:id/activate", async (req, res) => {
+// POST /vouchers/:id/activate — requires auth + ownership
+router.post("/:id/activate", requireAuth, async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
-    const updated = await db.update(vouchersTable)
+    const id = parseInt(String(req.params.id));
+    const vouchers = await db
+      .select()
+      .from(vouchersTable)
+      .where(eq(vouchersTable.id, id))
+      .limit(1);
+
+    if (!vouchers.length) return res.status(404).json({ error: "Not found" });
+
+    const telegramId = req.telegramId!;
+    const users = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.telegramId, telegramId))
+      .limit(1);
+
+    if (!users.length || vouchers[0].userId !== users[0].id) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    const updated = await db
+      .update(vouchersTable)
       .set({ status: "used" })
       .where(eq(vouchersTable.id, id))
       .returning();
-    if (!updated.length) return res.status(404).json({ error: "Not found" });
+
     const enriched = await enrichVoucher(updated[0]);
     res.json(enriched);
   } catch (err) {
