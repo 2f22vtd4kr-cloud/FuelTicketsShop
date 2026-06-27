@@ -1,8 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowUpRight, TrendingUp, ShieldCheck, ChevronDown, CheckCircle2, Loader2, ExternalLink } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { CheckCircle2, Loader2, ExternalLink, ChevronDown } from "lucide-react";
 import { useGetLivePrices, useListStations, useCreatePaymentOrder, useGetPaymentOrder } from "@workspace/api-client-react";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
@@ -14,6 +12,25 @@ type PaymentStep =
   | { type: "confirming"; orderId: number }
   | { type: "done"; voucherId: number };
 
+const FUEL_CONFIG = [
+  { id: "ai92",   name: "АИ-92",  accent: "#F59E0B", label: "92"  },
+  { id: "ai95",   name: "АИ-95",  accent: "#3B82F6", label: "95"  },
+  { id: "ai98",   name: "АИ-98",  accent: "#A855F7", label: "98"  },
+  { id: "diesel", name: "Дизель", accent: "#10B981", label: "ДТ"  },
+];
+
+const QUICK_LITERS = [20, 40, 60];
+
+function glassCard(accent?: string) {
+  return {
+    background: "rgba(255,255,255,0.04)",
+    backdropFilter: "blur(24px)",
+    border: `1px solid ${accent ? `${accent}22` : "rgba(255,255,255,0.07)"}`,
+    borderRadius: 20,
+    boxShadow: accent ? `0 0 24px ${accent}12` : "none",
+  } as React.CSSProperties;
+}
+
 export default function CatalogPage() {
   const { data: livePrices, isLoading: isLoadingPrices } = useGetLivePrices();
   const { data: stations } = useListStations();
@@ -23,13 +40,12 @@ export default function CatalogPage() {
   const { user } = useUser();
 
   const [expandedFuel, setExpandedFuel] = useState<string | null>(null);
-  const [liters, setLiters] = useState<number>(30);
+  const [liters, setLiters] = useState<number>(40);
   const [selectedStation, setSelectedStation] = useState<number | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<"stars" | "crypto">("stars");
   const [step, setStep] = useState<PaymentStep>({ type: "idle" });
 
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
   const orderId = step.type === "waiting_payment" || step.type === "confirming" ? step.orderId : null;
 
   const { data: orderStatus } = useGetPaymentOrder(
@@ -46,19 +62,9 @@ export default function CatalogPage() {
     }
   }, [orderStatus]);
 
-  // Cleanup on unmount
   useEffect(() => {
-    return () => {
-      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-    };
+    return () => { if (pollIntervalRef.current) clearInterval(pollIntervalRef.current); };
   }, []);
-
-  const fuelTypes = [
-    { id: "ai92", name: "АИ-92", color: "#F59E0B" },
-    { id: "ai95", name: "АИ-95", color: "#3B82F6" },
-    { id: "ai98", name: "АИ-98", color: "#A855F7" },
-    { id: "diesel", name: "Дизель", color: "#10B981" },
-  ];
 
   const handlePurchase = () => {
     if (!selectedStation) {
@@ -79,32 +85,24 @@ export default function CatalogPage() {
             webInvoiceUrl: order.webInvoiceUrl ?? null,
             starsAmount: order.starsAmount ?? null,
           });
-
           if (order.method === "stars") {
-            // Open Telegram Stars payment sheet inside the Mini App
             const tg = (window as any).Telegram?.WebApp;
             if (tg?.openInvoice) {
               tg.openInvoice(order.invoiceUrl, (status: string) => {
-                if (status === "paid") {
-                  setStep({ type: "confirming", orderId: order.orderId });
-                } else if (status === "failed" || status === "cancelled") {
+                if (status === "paid") setStep({ type: "confirming", orderId: order.orderId });
+                else if (status === "failed" || status === "cancelled") {
                   toast({ title: "Оплата отменена", variant: "destructive" });
                   setStep({ type: "idle" });
                 }
               });
             } else {
-              // Fallback: open in browser if not inside Telegram
               window.open(order.invoiceUrl, "_blank");
             }
           } else {
-            // CryptoBot: open mini-app invoice
             const tg = (window as any).Telegram?.WebApp;
             const url = tg ? order.invoiceUrl : (order.webInvoiceUrl ?? order.invoiceUrl);
-            if (tg?.openLink) {
-              tg.openLink(url);
-            } else {
-              window.open(url, "_blank");
-            }
+            if (tg?.openLink) tg.openLink(url);
+            else window.open(url, "_blank");
           }
         },
         onError: () => {
@@ -114,105 +112,91 @@ export default function CatalogPage() {
     );
   };
 
-  const handleCancel = () => {
-    setStep({ type: "idle" });
-  };
+  const activeFuelConfig = FUEL_CONFIG.find(f => f.id === expandedFuel);
+  const price = expandedFuel ? livePrices?.[expandedFuel as keyof typeof livePrices] ?? null : null;
+  const totalRub = price ? (Number(price) * liters) : null;
+  const savings90 = totalRub ? Math.round(totalRub * 0.08) : null;
 
-  const price = expandedFuel
-    ? livePrices?.[expandedFuel as keyof typeof livePrices] ?? null
-    : null;
-
-  const totalRub = price ? (Number(price) * liters).toFixed(2) : "--";
-
-  // Show payment waiting overlay when payment is in progress
+  // Payment waiting overlay
   if (step.type === "waiting_payment" || step.type === "confirming" || step.type === "done") {
     return (
       <div className="w-full min-h-full flex flex-col items-center justify-center p-6 gap-6">
         <motion.div
-          initial={{ scale: 0.8, opacity: 0 }}
+          initial={{ scale: 0.9, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          className="glass-panel rounded-3xl p-8 w-full max-w-sm flex flex-col items-center gap-6 text-center"
+          style={{ ...glassCard("#A855F7"), borderRadius: 28, padding: "2rem", width: "100%", maxWidth: 360 }}
+          className="flex flex-col items-center gap-6 text-center"
         >
           {step.type === "done" ? (
             <>
-              <div className="w-20 h-20 rounded-full bg-cyan-400/20 flex items-center justify-center">
-                <CheckCircle2 className="w-10 h-10 text-cyan-400" />
+              <div style={{ width: 72, height: 72, borderRadius: "50%", background: "rgba(34,211,238,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <CheckCircle2 style={{ width: 36, height: 36, color: "#22D3EE" }} />
               </div>
               <div>
                 <h2 className="text-2xl font-black mb-1">Готово!</h2>
-                <p className="text-white/60">Переходим в Сейф…</p>
+                <p style={{ color: "rgba(255,255,255,0.5)" }}>Переходим в Сейф…</p>
               </div>
             </>
           ) : step.type === "confirming" ? (
             <>
-              <div className="w-20 h-20 rounded-full bg-primary/20 flex items-center justify-center">
-                <Loader2 className="w-10 h-10 text-primary animate-spin" />
+              <div style={{ width: 72, height: 72, borderRadius: "50%", background: "rgba(168,85,247,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Loader2 style={{ width: 36, height: 36, color: "#A855F7" }} className="animate-spin" />
               </div>
               <div>
                 <h2 className="text-xl font-black mb-1">Подтверждаем…</h2>
-                <p className="text-white/60 text-sm">Дожидаемся подтверждения сети</p>
+                <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 14 }}>Дожидаемся подтверждения сети</p>
               </div>
             </>
           ) : (
             <>
-              <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center">
-                {step.method === "stars" ? (
-                  <span className="text-4xl">⭐️</span>
-                ) : (
-                  <span className="text-4xl">💎</span>
-                )}
+              <div style={{ width: 72, height: 72, borderRadius: "50%", background: "rgba(168,85,247,0.10)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32 }}>
+                {step.method === "stars" ? "⭐️" : "💎"}
               </div>
-
               <div>
                 <h2 className="text-xl font-black mb-1">
                   {step.method === "stars" ? "Оплата Telegram Stars" : "Оплата CryptoBot"}
                 </h2>
-                <p className="text-white/60 text-sm">
+                <p style={{ color: "rgba(255,255,255,0.5)", fontSize: 14 }}>
                   {step.method === "stars"
                     ? "Оплатите в окне Telegram. После оплаты талон будет создан автоматически."
                     : "Перейдите по ссылке и оплатите счёт. Талон будет создан автоматически."}
                 </p>
               </div>
-
               {step.method === "stars" && step.starsAmount && (
-                <div className="glass-panel rounded-2xl px-6 py-3 border-primary/30">
-                  <span className="text-3xl font-black text-primary">⭐️ {step.starsAmount}</span>
-                  <p className="text-white/50 text-xs mt-1">Telegram Stars</p>
+                <div style={{ ...glassCard("#A855F7"), padding: "12px 24px", borderRadius: 16, textAlign: "center" }}>
+                  <span style={{ fontSize: 28, fontWeight: 900, color: "#A855F7" }}>⭐️ {step.starsAmount}</span>
+                  <p style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 4 }}>Telegram Stars</p>
                 </div>
               )}
-
               {step.method === "crypto" && (
                 <a
                   href={step.webInvoiceUrl ?? step.invoiceUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-cyan-400 text-sm font-medium underline underline-offset-4"
+                  style={{ display: "flex", alignItems: "center", gap: 6, color: "#22D3EE", fontSize: 14, fontWeight: 500 }}
                 >
-                  Открыть счёт в браузере <ExternalLink className="w-4 h-4" />
+                  Открыть счёт в браузере <ExternalLink style={{ width: 14, height: 14 }} />
                 </a>
               )}
-
-              <div className="w-full flex flex-col gap-2 pt-2">
-                <p className="text-white/40 text-xs">Ожидаем подтверждения платежа…</p>
-                <div className="flex gap-1 justify-center">
+              <div style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+                <p style={{ fontSize: 12, color: "rgba(255,255,255,0.35)" }}>Ожидаем подтверждения платежа…</p>
+                <div style={{ display: "flex", gap: 6 }}>
                   {[0, 1, 2].map((i) => (
                     <motion.div
                       key={i}
-                      className="w-2 h-2 rounded-full bg-primary"
+                      style={{ width: 8, height: 8, borderRadius: "50%", background: "#A855F7" }}
                       animate={{ opacity: [0.3, 1, 0.3] }}
                       transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.4 }}
                     />
                   ))}
                 </div>
               </div>
-
-              <Button
-                variant="ghost"
-                className="text-white/40 text-sm"
-                onClick={handleCancel}
+              <button
+                style={{ color: "rgba(255,255,255,0.35)", fontSize: 14, background: "none", border: "none", cursor: "pointer" }}
+                onClick={() => setStep({ type: "idle" })}
               >
                 Отменить
-              </Button>
+              </button>
             </>
           )}
         </motion.div>
@@ -221,206 +205,281 @@ export default function CatalogPage() {
   }
 
   return (
-    <div className="w-full min-h-full p-4 pt-6 pb-24 flex flex-col gap-6">
-      {/* Hero Banner */}
+    <div className="w-full min-h-full pb-28" style={{ padding: "24px 16px 112px" }}>
+      {/* Header */}
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
-        className="glass-panel rounded-2xl p-6 relative overflow-hidden"
+        style={{ marginBottom: 24 }}
       >
-        <div className="absolute top-0 right-0 w-32 h-32 bg-primary/20 blur-3xl rounded-full -mr-10 -mt-10" />
-        <div className="absolute bottom-0 left-0 w-24 h-24 bg-cyan-400/20 blur-2xl rounded-full -ml-10 -mb-10" />
+        <h1 style={{ fontSize: 18, fontWeight: 700, letterSpacing: 2, color: "white", textTransform: "uppercase" }}>
+          КАТАЛОГ
+        </h1>
+        <p style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 4 }}>
+          Зафиксируй цену сегодня
+        </p>
+      </motion.div>
 
-        <div className="relative z-10">
-          <div className="flex items-center gap-2 mb-3">
-            <ShieldCheck className="w-5 h-5 text-cyan-400" />
-            <span className="text-xs font-bold uppercase tracking-widest text-cyan-400">Защита от инфляции</span>
-          </div>
-          <h2 className="text-2xl font-black leading-tight mb-2">
-            Цена заморожена<br />на 90 дней.
-          </h2>
-          <p className="text-white/60 text-sm">
-            Покупайте топливо сейчас, заправляйтесь потом. Зафиксируйте цену и забудьте о подорожании.
+      {/* Live price widget */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.05 }}
+        style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 24 }}
+      >
+        <div style={{ ...glassCard(), padding: "14px 16px", borderRadius: 16 }}>
+          <p style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginBottom: 6 }}>Рынок (АИ-95)</p>
+          <p style={{ fontSize: 20, fontWeight: 700, color: "white" }}>
+            {livePrices?.ai95 ? (Number(livePrices.ai95) + 1.2).toFixed(2) : "—"} ₽
           </p>
+          <p style={{ fontSize: 11, color: "#EF4444", marginTop: 4 }}>↑ Ожидается рост</p>
+        </div>
+        <div style={{ ...glassCard("#22D3EE"), padding: "14px 16px", borderRadius: 16 }}>
+          <p style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginBottom: 6 }}>Ваша цена</p>
+          <p style={{ fontSize: 20, fontWeight: 700, color: "#22D3EE" }}>
+            {livePrices?.ai95 ? Number(livePrices.ai95).toFixed(2) : "—"} ₽
+          </p>
+          <p style={{ fontSize: 11, color: "#22D3EE", marginTop: 4 }}>✓ Заморожена</p>
         </div>
       </motion.div>
 
-      {/* Live Market Widget */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="grid grid-cols-2 gap-3"
-      >
-        <div className="glass-panel rounded-2xl p-4 flex flex-col justify-center">
-          <span className="text-xs text-white/50 mb-1">Рынок (АИ-95)</span>
-          <div className="flex items-center gap-2">
-            <span className="text-xl font-bold">{livePrices?.ai95 ? (livePrices.ai95 + 1.2).toFixed(2) : "--"} ₽</span>
-            <TrendingUp className="w-4 h-4 text-red-500" />
-          </div>
-          <span className="text-[10px] text-red-500 mt-1">Ожидается рост</span>
-        </div>
-        <div className="glass-panel rounded-2xl p-4 flex flex-col justify-center border-cyan-500/30 shadow-[0_0_15px_rgba(34,211,238,0.1)]">
-          <span className="text-xs text-white/50 mb-1">Ваша цена</span>
-          <div className="flex items-center gap-2">
-            <span className="text-xl font-bold text-cyan-400">{livePrices?.ai95 ? livePrices.ai95.toFixed(2) : "--"} ₽</span>
-            <CheckCircle2 className="w-4 h-4 text-cyan-400" />
-          </div>
-          <span className="text-[10px] text-cyan-400 mt-1">Заморожена</span>
-        </div>
-      </motion.div>
+      {/* Fuel type cards */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <h3 style={{ fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.5)", letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>
+          Выберите топливо
+        </h3>
 
-      {/* Fuel Type Cards */}
-      <div className="space-y-4">
-        <h3 className="text-lg font-bold px-1">Выберите топливо</h3>
-
-        {fuelTypes.map((fuel, index) => {
-          const isExpanded = expandedFuel === fuel.id;
+        {FUEL_CONFIG.map((fuel, idx) => {
+          const isOpen = expandedFuel === fuel.id;
           const fuelPrice = livePrices ? livePrices[fuel.id as keyof typeof livePrices] : null;
 
           return (
             <motion.div
               key={fuel.id}
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 + index * 0.05 }}
-              className={`glass-panel rounded-2xl overflow-hidden transition-all duration-300 ${isExpanded ? "border-white/30" : ""}`}
-              style={{ boxShadow: isExpanded ? `0 0 20px ${fuel.color}20` : "none" }}
+              transition={{ delay: 0.1 + idx * 0.05 }}
+              style={{
+                ...glassCard(isOpen ? fuel.accent : undefined),
+                borderRadius: 20,
+                overflow: "hidden",
+                transition: "all 0.25s ease",
+              }}
             >
+              {/* Card header */}
               <button
-                className="w-full p-5 flex items-center justify-between"
-                onClick={() => setExpandedFuel(isExpanded ? null : fuel.id)}
+                style={{ width: "100%", padding: "18px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", background: "none", border: "none", cursor: "pointer", color: "white" }}
+                onClick={() => setExpandedFuel(isOpen ? null : fuel.id)}
               >
-                <div className="flex items-center gap-4">
-                  <div
-                    className="w-12 h-12 rounded-xl flex items-center justify-center text-lg font-black"
-                    style={{ backgroundColor: `${fuel.color}20`, color: fuel.color }}
-                  >
-                    {fuel.name.split("-")[1] || "ДТ"}
+                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                  {/* Left color bar */}
+                  <div style={{ width: 3, height: 44, borderRadius: 2, background: fuel.accent, flexShrink: 0 }} />
+                  {/* Icon badge */}
+                  <div style={{
+                    width: 44, height: 44, borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center",
+                    background: `${fuel.accent}18`, color: fuel.accent, fontSize: 16, fontWeight: 800,
+                  }}>
+                    {fuel.label}
                   </div>
-                  <div className="text-left">
-                    <div className="font-bold text-lg">{fuel.name}</div>
-                    <div className="text-sm text-white/50">От {fuelPrice || "--"} ₽/л</div>
+                  <div style={{ textAlign: "left" }}>
+                    <p style={{ fontWeight: 700, fontSize: 16, color: "white" }}>{fuel.name}</p>
+                    <p style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 2 }}>
+                      {fuelPrice ? `${Number(fuelPrice).toFixed(2)} ₽/л` : isLoadingPrices ? "Загрузка…" : "—"}
+                    </p>
                   </div>
                 </div>
-                <ChevronDown className={`w-5 h-5 text-white/50 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                <ChevronDown
+                  style={{ width: 18, height: 18, color: "rgba(255,255,255,0.35)", transform: isOpen ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}
+                />
               </button>
 
+              {/* Expanded purchase UI */}
               <AnimatePresence>
-                {isExpanded && (
+                {isOpen && (
                   <motion.div
                     initial={{ height: 0, opacity: 0 }}
                     animate={{ height: "auto", opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
-                    className="overflow-hidden border-t border-white/10"
+                    transition={{ duration: 0.25 }}
+                    style={{ overflow: "hidden", borderTop: "1px solid rgba(255,255,255,0.07)" }}
                   >
-                    <div className="p-5 space-y-5 bg-black/20">
-                      {/* Liters */}
+                    <div style={{ padding: "20px 18px", display: "flex", flexDirection: "column", gap: 20 }}>
+
+                      {/* Liter selector */}
                       <div>
-                        <label className="text-xs text-white/50 font-medium uppercase tracking-wider mb-2 block">
-                          Объем (литры)
-                        </label>
-                        <div className="flex items-center gap-3">
-                          <Input
-                            type="number"
+                        <p style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 }}>
+                          Объём
+                        </p>
+                        {/* Giant number display */}
+                        <div style={{ textAlign: "center", marginBottom: 16 }}>
+                          <span style={{ fontSize: 64, fontWeight: 800, color: "white", lineHeight: 1, textShadow: `0 0 40px ${fuel.accent}40` }}>
+                            {liters}
+                          </span>
+                          <span style={{ fontSize: 20, color: "rgba(255,255,255,0.4)", marginLeft: 4 }}>л</span>
+                        </div>
+
+                        {/* Range slider */}
+                        <div style={{ position: "relative", marginBottom: 16 }}>
+                          <style>{`
+                            .fuel-slider-${fuel.id}::-webkit-slider-thumb {
+                              -webkit-appearance: none;
+                              width: 22px; height: 22px; border-radius: 50%;
+                              background: white;
+                              box-shadow: 0 0 0 4px ${fuel.accent}44, 0 4px 12px rgba(0,0,0,0.4);
+                              cursor: pointer;
+                            }
+                            .fuel-slider-${fuel.id}::-webkit-slider-runnable-track {
+                              height: 6px; border-radius: 3px;
+                              background: linear-gradient(90deg, ${fuel.accent} ${((liters - 10) / 90) * 100}%, rgba(255,255,255,0.1) ${((liters - 10) / 90) * 100}%);
+                            }
+                            .fuel-slider-${fuel.id} { -webkit-appearance: none; width: 100%; height: 6px; cursor: pointer; background: transparent; outline: none; }
+                          `}</style>
+                          <input
+                            type="range"
+                            min={10}
+                            max={100}
                             value={liters}
                             onChange={(e) => setLiters(Number(e.target.value))}
-                            className="bg-white/5 border-white/10 h-12 text-lg text-center"
+                            className={`fuel-slider-${fuel.id}`}
                           />
-                          <div className="flex gap-2">
-                            {[20, 30, 40, 50].map((val) => (
-                              <Button
+                        </div>
+
+                        {/* Quick pick pills */}
+                        <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+                          {QUICK_LITERS.map((val) => {
+                            const isActive = liters === val;
+                            return (
+                              <button
                                 key={val}
-                                variant="outline"
-                                size="sm"
                                 onClick={() => setLiters(val)}
-                                className={`h-12 w-12 rounded-xl border-white/10 bg-transparent ${liters === val ? "bg-white/10 text-white" : "text-white/50"}`}
+                                style={{
+                                  padding: "9px 20px", borderRadius: 100, fontSize: 13, fontWeight: 600, cursor: "pointer",
+                                  background: isActive ? `${fuel.accent}18` : "rgba(255,255,255,0.05)",
+                                  border: `1px solid ${isActive ? `${fuel.accent}55` : "rgba(255,255,255,0.1)"}`,
+                                  color: isActive ? fuel.accent : "rgba(255,255,255,0.45)",
+                                  boxShadow: isActive ? `0 0 14px ${fuel.accent}20` : "none",
+                                  transition: "all 0.15s",
+                                }}
                               >
-                                {val}
-                              </Button>
-                            ))}
-                          </div>
+                                {val} л
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
 
-                      {/* Station */}
+                      {/* Station selector */}
                       <div>
-                        <label className="text-xs text-white/50 font-medium uppercase tracking-wider mb-2 block">
-                          Станция для заморозки
-                        </label>
-                        <div className="grid grid-cols-1 gap-2">
-                          {stations?.slice(0, 3).map((station) => (
-                            <button
-                              key={station.id}
-                              onClick={() => setSelectedStation(station.id)}
-                              className={`p-3 rounded-xl flex items-center justify-between text-left transition-all border ${
-                                selectedStation === station.id
-                                  ? "border-cyan-400/50 bg-cyan-400/10"
-                                  : "border-white/10 bg-white/5 hover:bg-white/10"
-                              }`}
-                            >
-                              <div>
-                                <div className="font-medium text-sm">{station.name}</div>
-                                <div className="text-xs text-white/50">{station.address}</div>
-                              </div>
-                              {selectedStation === station.id && <CheckCircle2 className="w-4 h-4 text-cyan-400" />}
-                            </button>
-                          ))}
+                        <p style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>
+                          Станция
+                        </p>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                          {stations?.slice(0, 3).map((station) => {
+                            const isSel = selectedStation === station.id;
+                            return (
+                              <button
+                                key={station.id}
+                                onClick={() => setSelectedStation(station.id)}
+                                style={{
+                                  padding: "12px 14px", borderRadius: 14, display: "flex", alignItems: "center",
+                                  justifyContent: "space-between", textAlign: "left", cursor: "pointer",
+                                  background: isSel ? `${fuel.accent}12` : "rgba(255,255,255,0.04)",
+                                  border: `1px solid ${isSel ? `${fuel.accent}44` : "rgba(255,255,255,0.08)"}`,
+                                  transition: "all 0.15s",
+                                }}
+                              >
+                                <div>
+                                  <p style={{ fontSize: 13, fontWeight: 600, color: "white" }}>{station.name}</p>
+                                  <p style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", marginTop: 2 }}>{station.address}</p>
+                                </div>
+                                {isSel && <CheckCircle2 style={{ width: 16, height: 16, color: fuel.accent, flexShrink: 0 }} />}
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
 
-                      {/* Payment Method */}
+                      {/* Payment method */}
                       <div>
-                        <label className="text-xs text-white/50 font-medium uppercase tracking-wider mb-2 block">
+                        <p style={{ fontSize: 11, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>
                           Оплата
-                        </label>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => setPaymentMethod("stars")}
-                            className={`flex-1 p-3 rounded-xl flex flex-col items-center justify-center gap-1 border transition-all ${
-                              paymentMethod === "stars" ? "border-primary/50 bg-primary/20" : "border-white/10 bg-white/5"
-                            }`}
-                          >
-                            <span className="text-xl">⭐️</span>
-                            <span className="text-xs font-medium">Telegram Stars</span>
-                          </button>
-                          <button
-                            onClick={() => setPaymentMethod("crypto")}
-                            className={`flex-1 p-3 rounded-xl flex flex-col items-center justify-center gap-1 border transition-all ${
-                              paymentMethod === "crypto" ? "border-primary/50 bg-primary/20" : "border-white/10 bg-white/5"
-                            }`}
-                          >
-                            <span className="text-xl">💎</span>
-                            <span className="text-xs font-medium">TON / CryptoBot</span>
-                          </button>
+                        </p>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          {(["stars", "crypto"] as const).map((method) => {
+                            const isSel = paymentMethod === method;
+                            return (
+                              <button
+                                key={method}
+                                onClick={() => setPaymentMethod(method)}
+                                style={{
+                                  flex: 1, padding: "12px", borderRadius: 14, display: "flex", flexDirection: "column",
+                                  alignItems: "center", gap: 6, cursor: "pointer",
+                                  background: isSel ? `${fuel.accent}15` : "rgba(255,255,255,0.04)",
+                                  border: `1px solid ${isSel ? `${fuel.accent}44` : "rgba(255,255,255,0.08)"}`,
+                                  transition: "all 0.15s",
+                                }}
+                              >
+                                <span style={{ fontSize: 22 }}>{method === "stars" ? "⭐️" : "💎"}</span>
+                                <span style={{ fontSize: 12, fontWeight: 600, color: isSel ? fuel.accent : "rgba(255,255,255,0.45)" }}>
+                                  {method === "stars" ? "Telegram Stars" : "TON / CryptoBot"}
+                                </span>
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
 
-                      {/* Total + Buy */}
-                      <div className="pt-2 border-t border-white/10">
-                        <div className="flex justify-between items-center mb-2">
-                          <span className="text-white/60">К оплате:</span>
-                          <span className="text-2xl font-bold">{totalRub} ₽</span>
-                        </div>
-                        {paymentMethod === "stars" && fuelPrice && (
-                          <p className="text-white/40 text-xs text-right mb-3">
-                            ≈ ⭐️ {Math.max(1, Math.ceil((Number(fuelPrice) * liters) / 2))} Stars
-                          </p>
-                        )}
-                        <Button
-                          onClick={handlePurchase}
-                          disabled={isCreatingOrder}
-                          className="w-full h-12 rounded-xl bg-gradient-to-r from-primary to-cyan-500 hover:from-primary/90 hover:to-cyan-500/90 text-white font-bold border-0 shadow-[0_0_20px_rgba(168,85,247,0.3)]"
-                        >
-                          {isCreatingOrder ? (
-                            <span className="flex items-center gap-2">
-                              <Loader2 className="w-4 h-4 animate-spin" /> Создаём счёт…
-                            </span>
-                          ) : (
-                            "Заморозить цену"
+                      {/* Price summary card */}
+                      {fuelPrice && (
+                        <div style={{ ...glassCard(), borderRadius: 16, padding: "14px 16px" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <div>
+                              <p style={{ fontSize: 12, color: "rgba(255,255,255,0.4)" }}>Фиксированная цена</p>
+                              <p style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", marginTop: 2 }}>
+                                {Number(fuelPrice).toFixed(2)} ₽/л × {liters} л
+                              </p>
+                            </div>
+                            <p style={{ fontSize: 22, fontWeight: 800, color: "white" }}>
+                              {totalRub ? totalRub.toFixed(0) : "—"} ₽
+                            </p>
+                          </div>
+                          {savings90 && (
+                            <>
+                              <div style={{ height: 1, background: "rgba(255,255,255,0.06)", margin: "10px 0" }} />
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                <p style={{ fontSize: 12, color: "rgba(255,255,255,0.4)" }}>Прогноз экономии / 90 дней</p>
+                                <p style={{ fontSize: 14, fontWeight: 700, color: "#4ADE80" }}>+{savings90} ₽</p>
+                              </div>
+                              <p style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", marginTop: 2, textAlign: "right" }}>при росте на +8%</p>
+                            </>
                           )}
-                        </Button>
-                      </div>
+                          {paymentMethod === "stars" && fuelPrice && (
+                            <p style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 8, textAlign: "right" }}>
+                              ≈ ⭐️ {Math.max(1, Math.ceil((Number(fuelPrice) * liters) / 2))} Stars
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* CTA */}
+                      <button
+                        onClick={handlePurchase}
+                        disabled={isCreatingOrder || !selectedStation}
+                        style={{
+                          width: "100%", height: 56, borderRadius: 18, border: "none", cursor: "pointer",
+                          background: `linear-gradient(135deg, ${fuel.accent}, ${fuel.accent}cc)`,
+                          boxShadow: `0 12px 40px ${fuel.accent}44, 0 0 0 1px ${fuel.accent}33`,
+                          color: "white", fontSize: 16, fontWeight: 600, display: "flex", alignItems: "center",
+                          justifyContent: "center", gap: 8, opacity: isCreatingOrder || !selectedStation ? 0.6 : 1,
+                          transition: "all 0.15s",
+                        }}
+                      >
+                        {isCreatingOrder ? (
+                          <><Loader2 style={{ width: 18, height: 18 }} className="animate-spin" /> Создаём счёт…</>
+                        ) : (
+                          "Заморозить цену"
+                        )}
+                      </button>
                     </div>
                   </motion.div>
                 )}
