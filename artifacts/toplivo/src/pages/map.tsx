@@ -1,24 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useListStations } from "@workspace/api-client-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Filter, X, ChevronRight } from "lucide-react";
+import { Filter, X, Navigation } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
+import { MapContainer, TileLayer, CircleMarker, useMap } from "react-leaflet";
 import type { Station } from "@workspace/api-client-react/src/generated/api.schemas";
-
-// Mock coordinates for our stylized map
-const MOCK_MAP_STATIONS = [
-  { id: 1, x: 20, y: 30 },
-  { id: 2, x: 70, y: 15 },
-  { id: 3, x: 45, y: 50 },
-  { id: 4, x: 80, y: 75 },
-  { id: 5, x: 15, y: 70 },
-  { id: 6, x: 55, y: 82 },
-  { id: 7, x: 35, y: 20 },
-  { id: 8, x: 60, y: 40 },
-  { id: 9, x: 85, y: 50 },
-  { id: 10, x: 30, y: 60 },
-];
+import "leaflet/dist/leaflet.css";
 
 const NETWORK_COLORS: Record<string, string> = {
   "Лукойл": "#DC2626",
@@ -28,72 +16,105 @@ const NETWORK_COLORS: Record<string, string> = {
   "Татнефть": "#10B981",
 };
 
+const ALL_NETWORKS = Object.keys(NETWORK_COLORS);
+const ALL_FUELS = ["АИ-92", "АИ-95", "АИ-98", "ДТ"];
+
+function RecenterButton({ lat, lng }: { lat: number; lng: number }) {
+  const map = useMap();
+  return (
+    <button
+      className="absolute bottom-4 right-4 z-[1000] w-10 h-10 rounded-full glass-panel flex items-center justify-center text-white shadow-lg"
+      onClick={() => map.setView([lat, lng], 12)}
+    >
+      <Navigation className="w-4 h-4" />
+    </button>
+  );
+}
+
 export default function MapPage() {
   const { data: stations, isLoading } = useListStations();
   const [selectedStation, setSelectedStation] = useState<Station | null>(null);
   const [showFilters, setShowFilters] = useState(false);
+  const [activeNetworks, setActiveNetworks] = useState<Set<string>>(new Set(ALL_NETWORKS));
+  const [activeFuels, setActiveFuels] = useState<Set<string>>(new Set(ALL_FUELS));
 
-  const getStationColor = (network?: string) => {
-    return network ? NETWORK_COLORS[network] || "#FFFFFF" : "#FFFFFF";
-  };
+  const getStationColor = (network?: string) =>
+    network ? NETWORK_COLORS[network] || "#FFFFFF" : "#FFFFFF";
+
+  const toggleNetwork = (n: string) =>
+    setActiveNetworks((prev) => {
+      const next = new Set(prev);
+      next.has(n) ? next.delete(n) : next.add(n);
+      return next;
+    });
+
+  const toggleFuel = (f: string) =>
+    setActiveFuels((prev) => {
+      const next = new Set(prev);
+      next.has(f) ? next.delete(f) : next.add(f);
+      return next;
+    });
+
+  const filteredStations = stations?.filter((s) => activeNetworks.has(s.network ?? ""));
 
   return (
-    <div className="w-full relative flex items-center justify-center bg-[#0A0A0F] overflow-hidden" style={{ height: "calc(100dvh - 4rem)" }}>
-      {/* Background Stylized Map */}
-      <div className="absolute inset-0 z-0">
-        <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="1"/>
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#grid)" />
-          {/* Abstract routes */}
-          <path d="M 0 50 Q 50 20 100 80 T 200 40" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="2" />
-          <path d="M 50 0 Q 80 50 20 100 T 60 200" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="2" />
-        </svg>
-
-        {/* Station Markers */}
-        {!isLoading && stations && stations.map((station, i) => {
-          const coords = MOCK_MAP_STATIONS[i % MOCK_MAP_STATIONS.length];
-          const color = getStationColor(station.network);
-          return (
-            <motion.button
+    <div
+      className="w-full relative overflow-hidden"
+      style={{ height: "calc(100dvh - 4rem)" }}
+    >
+      {/* Leaflet Map */}
+      {!isLoading && stations && (
+        <MapContainer
+          center={[55.751, 37.617]}
+          zoom={11}
+          style={{ width: "100%", height: "100%" }}
+          zoomControl={false}
+          attributionControl={false}
+        >
+          <TileLayer
+            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+          />
+          {filteredStations?.map((station) => (
+            <CircleMarker
               key={station.id}
-              className="absolute w-8 h-8 -ml-4 -mt-4 rounded-full flex items-center justify-center z-10 focus:outline-none"
-              style={{ left: `${coords.x}%`, top: `${coords.y}%` }}
-              whileHover={{ scale: 1.2 }}
-              whileTap={{ scale: 0.9 }}
-              onClick={() => setSelectedStation(station)}
-            >
-              <div
-                className="w-4 h-4 rounded-full"
-                style={{
-                  backgroundColor: color,
-                  boxShadow: `0 0 15px ${color}, 0 0 30px ${color}`,
-                }}
-              />
-            </motion.button>
-          );
-        })}
-      </div>
+              center={[station.lat ?? 55.751, station.lng ?? 37.617]}
+              radius={10}
+              pathOptions={{
+                color: getStationColor(station.network),
+                fillColor: getStationColor(station.network),
+                fillOpacity: 0.9,
+                weight: 2,
+              }}
+              eventHandlers={{ click: () => setSelectedStation(station) }}
+            />
+          ))}
+          <RecenterButton lat={55.751} lng={37.617} />
+        </MapContainer>
+      )}
+
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-[#0A0A0F]">
+          <div className="text-white/40 text-sm">Загрузка карты…</div>
+        </div>
+      )}
 
       {/* Floating Header */}
-      <div className="absolute top-0 left-0 right-0 p-4 z-20 flex justify-between items-center pointer-events-none">
-        <h1 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-white to-white/50 tracking-tighter uppercase drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]">
+      <div className="absolute top-0 left-0 right-0 p-4 z-[1001] flex justify-between items-center pointer-events-none">
+        <h1 className="text-2xl font-black text-white tracking-tighter uppercase drop-shadow-[0_0_10px_rgba(0,0,0,0.8)]">
           Карта
         </h1>
         <Button
           variant="ghost"
           size="icon"
-          className="glass-panel text-white rounded-full pointer-events-auto"
+          className="glass-panel text-white rounded-full pointer-events-auto shadow-lg"
           onClick={() => setShowFilters(true)}
         >
           <Filter className="w-5 h-5" />
         </Button>
       </div>
 
-      {/* Slide-up Modal for Station Details */}
+      {/* Station Detail Slide-up */}
       <AnimatePresence>
         {selectedStation && (
           <motion.div
@@ -101,7 +122,7 @@ export default function MapPage() {
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="absolute bottom-0 left-0 right-0 glass-panel rounded-t-3xl p-6 z-30 border-b-0 pb-safe shadow-[0_-10px_40px_rgba(0,0,0,0.5)]"
+            className="absolute bottom-0 left-0 right-0 glass-panel rounded-t-3xl p-6 z-[1002] border-b-0 shadow-[0_-10px_40px_rgba(0,0,0,0.6)]"
           >
             <div className="flex justify-between items-start mb-6">
               <div>
@@ -132,7 +153,10 @@ export default function MapPage() {
 
             <div className="space-y-3 mb-6">
               {selectedStation.prices?.map((price) => (
-                <div key={price.fuelType} className="flex justify-between items-center bg-white/5 p-3 rounded-xl border border-white/5">
+                <div
+                  key={price.fuelType}
+                  className="flex justify-between items-center bg-white/5 p-3 rounded-xl border border-white/5"
+                >
                   <span className="font-medium text-white">{price.fuelType}</span>
                   <div className="flex items-baseline gap-2">
                     {price.lockedPrice && (
@@ -157,7 +181,7 @@ export default function MapPage() {
         )}
       </AnimatePresence>
 
-      {/* Slide-up Filters */}
+      {/* Filters Slide-up */}
       <AnimatePresence>
         {showFilters && (
           <>
@@ -165,7 +189,7 @@ export default function MapPage() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm z-40"
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm z-[1003]"
               onClick={() => setShowFilters(false)}
             />
             <motion.div
@@ -173,7 +197,7 @@ export default function MapPage() {
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 25, stiffness: 200 }}
-              className="absolute bottom-0 left-0 right-0 bg-[#0A0A0F] border-t border-white/10 rounded-t-3xl p-6 z-50 pb-safe"
+              className="absolute bottom-0 left-0 right-0 bg-[#0A0A0F] border-t border-white/10 rounded-t-3xl p-6 z-[1004]"
             >
               <div className="flex justify-between items-center mb-6">
                 <h3 className="text-xl font-bold">Фильтры</h3>
@@ -181,37 +205,59 @@ export default function MapPage() {
                   <X className="w-5 h-5" />
                 </Button>
               </div>
-              
+
               <div className="space-y-6">
                 <div>
                   <h4 className="text-sm font-medium text-white/50 mb-3">Сеть АЗС</h4>
                   <div className="flex flex-wrap gap-2">
-                    {Object.entries(NETWORK_COLORS).map(([network, color]) => (
-                      <button
-                        key={network}
-                        className="px-4 py-2 rounded-full glass-panel text-sm font-medium transition-all hover:bg-white/10 active:scale-95"
-                      >
-                        {network}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                
-                <div>
-                  <h4 className="text-sm font-medium text-white/50 mb-3">Вид топлива</h4>
-                  <div className="flex flex-wrap gap-2">
-                    {["АИ-92", "АИ-95", "АИ-98", "ДТ"].map((type) => (
-                      <button
-                        key={type}
-                        className="px-4 py-2 rounded-full glass-panel text-sm font-medium transition-all hover:bg-white/10 active:scale-95"
-                      >
-                        {type}
-                      </button>
-                    ))}
+                    {ALL_NETWORKS.map((network) => {
+                      const active = activeNetworks.has(network);
+                      const color = NETWORK_COLORS[network];
+                      return (
+                        <button
+                          key={network}
+                          onClick={() => toggleNetwork(network)}
+                          className="px-4 py-2 rounded-full text-sm font-medium transition-all active:scale-95 border"
+                          style={{
+                            borderColor: active ? color : "rgba(255,255,255,0.1)",
+                            backgroundColor: active ? `${color}22` : "transparent",
+                            color: active ? color : "rgba(255,255,255,0.5)",
+                          }}
+                        >
+                          {network}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
-                <Button className="w-full bg-white text-black hover:bg-white/90 font-bold h-12 rounded-xl mt-4">
+                <div>
+                  <h4 className="text-sm font-medium text-white/50 mb-3">Вид топлива</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {ALL_FUELS.map((type) => {
+                      const active = activeFuels.has(type);
+                      return (
+                        <button
+                          key={type}
+                          onClick={() => toggleFuel(type)}
+                          className="px-4 py-2 rounded-full text-sm font-medium transition-all active:scale-95 border"
+                          style={{
+                            borderColor: active ? "rgba(168,85,247,0.8)" : "rgba(255,255,255,0.1)",
+                            backgroundColor: active ? "rgba(168,85,247,0.15)" : "transparent",
+                            color: active ? "rgba(168,85,247,1)" : "rgba(255,255,255,0.5)",
+                          }}
+                        >
+                          {type}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <Button
+                  className="w-full bg-white text-black hover:bg-white/90 font-bold h-12 rounded-xl"
+                  onClick={() => setShowFilters(false)}
+                >
                   Применить
                 </Button>
               </div>
